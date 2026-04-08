@@ -1,0 +1,26 @@
+# Build and IDE files
+build/
+.gradle/
+.idea/
+bin/
+out/
+.settings/
+.classpath/
+.project/
+.nb-gradle/
+
+# Docker files
+Dockerfile
+docker-compose*.yaml
+.env
+
+# Git files
+.git/
+.gitignore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

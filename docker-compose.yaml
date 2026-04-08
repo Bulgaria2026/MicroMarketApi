@@ -1,0 +1,48 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: micromarket_db
+    environment:
+      POSTGRES_DB: micromarket_db
+      POSTGRES_USER: ${DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    networks:
+      - micromarket_net
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  backend:
+    image: micromarket_be:latest
+    container_name: micromarket_be
+    build: .
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/micromarket_db
+      DATABASE_USERNAME: ${DATABASE_USERNAME}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+    depends_on:
+      - postgres
+    networks:
+      - micromarket_net
+    ports:
+      - "8080:8080"  # optional if exposed via proxy
+
+  frontend:
+    image: micromarket_ui:latest
+    container_name: micromarket_ui
+    environment:
+      VITE_BACKEND_URL: http://backend:8080  # update when known and save in env
+    depends_on:
+      - backend
+    networks:
+      - micromarket_net
+    ports:
+      - "80:80"  # public entry point
+
+networks:
+  micromarket_net:
+    driver: bridge
+
+volumes:
+  pg_data:
