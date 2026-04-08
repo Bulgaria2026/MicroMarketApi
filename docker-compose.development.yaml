@@ -13,7 +13,8 @@ services:
     build: .
     container_name: micromarket_be
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      DATABASE_URL: jdbc:postgresql://postgres:5432/micromarket_db
       DATABASE_USERNAME: ${DATABASE_USERNAME}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
     depends_on:
