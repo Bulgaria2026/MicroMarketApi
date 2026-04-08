@@ -1,35 +1,70 @@
 # MicroMarketApi
 
-### Reference Documentation
+MicroMarketApi is a Spring Boot application for the MicroMarket platform.
 
-For further reference, please consider the following sections:
+## Requirements
 
-* [Official Gradle documentation](https://docs.gradle.org)
-* [Spring Boot Gradle Plugin Reference Guide](https://docs.spring.io/spring-boot/4.0.5/gradle-plugin)
-* [Create an OCI image](https://docs.spring.io/spring-boot/4.0.5/gradle-plugin/packaging-oci-image.html)
-* [Spring Data JPA](https://docs.spring.io/spring-boot/4.0.5/reference/data/sql.html#data.sql.jpa-and-spring-data)
-* [Spring Boot DevTools](https://docs.spring.io/spring-boot/4.0.5/reference/using/devtools.html)
-* [Liquibase Migration](https://docs.spring.io/spring-boot/4.0.5/how-to/data-initialization.html#howto.data-initialization.migration-tool.liquibase)
-* [Spring Security](https://docs.spring.io/spring-boot/4.0.5/reference/web/spring-security.html)
-* [SpringDoc OpenAPI](https://springdoc.org/)
-* [Spring Web](https://docs.spring.io/spring-boot/4.0.5/reference/web/servlet.html)
+- Java 21+
+- Gradle
+- Docker and Docker Compose
+- PostgreSQL 18+ if not using Docker
 
-### Guides
+## Configuration
 
-The following guides illustrate how to use some features concretely:
+The application reads its configuration from environment variables or a local `.env` file.
 
-* [Accessing Data with JPA](https://spring.io/guides/gs/accessing-data-jpa/)
-* [Securing a Web Application](https://spring.io/guides/gs/securing-web/)
-* [Spring Boot and OAuth2](https://spring.io/guides/tutorials/spring-boot-oauth2/)
-* [Authenticating a User with LDAP](https://spring.io/guides/gs/authenticating-ldap/)
-* [SpringDoc OpenAPI](https://github.com/springdoc/springdoc-openapi-demos/)
-* [Building a RESTful Web Service](https://spring.io/guides/gs/rest-service/)
-* [Serving Web Content with Spring MVC](https://spring.io/guides/gs/serving-web-content/)
-* [Building REST services with Spring](https://spring.io/guides/tutorials/rest/)
+### Environment variables
 
-### Additional Links
+Copy [.env.example](.env.example) to `.env` in the project root and configure the values for your environment:
 
-These additional references should also help you:
+```bash
+cp .env.example .env
+```
 
-* [Gradle Build Scans – insights for your project's build](https://scans.gradle.com#gradle)
+Then update the variables as needed.
 
+## Database
+
+A local PostgreSQL container is defined in [docker-compose.database.yaml](docker-compose.database.yaml).
+
+Start it with:
+
+```bash
+docker compose -f docker-compose.database.yaml up -d
+```
+
+## Running the application
+
+### With Gradle
+
+```bash
+./gradlew bootRun
+```
+
+The application runs with the profile defined by `SPRING_PROFILES_ACTIVE` and connects to the PostgreSQL database configured in the environment.
+
+### With Docker
+
+Use [docker-compose.development.yaml](docker-compose.development.yaml) for to run the backend for frontend development or [docker-compose.yaml](docker-compose.yaml) for production.
+
+## API documentation
+
+After starting the application, the API should be available at:
+
+```text
+http://localhost:8080/api/v1
+```
+
+You can also use the Swagger UI for API information at:
+
+```text
+http://localhost:8080/swagger-ui/index.html
+```
+
+## Testing
+
+Run the test suite with:
+
+```bash
+./gradlew test
+```
