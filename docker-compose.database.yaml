@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:latest
+    image: postgres:18.3
     container_name: micromarket_db
     environment:
       POSTGRES_DB: micromarket_db
