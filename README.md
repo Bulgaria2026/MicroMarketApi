@@ -4,66 +4,77 @@ MicroMarketApi is a Spring Boot application for the MicroMarket platform.
 
 ## Requirements
 
-- Java 21+
+- Java 25+
 - Gradle
 - Docker and Docker Compose
 - PostgreSQL 18+ if not using Docker
 
 ## Configuration
 
-The application reads its configuration from environment variables or a local `.env` file.
+The application requires environment variables to run. You can manage these using a local `.env` file.
 
-### Environment variables
+1. Copy the example file to create your local environment file:
+   ```bash
+   cp .env.example .env
+   ```
+2. Update the values in `.env` to match your local setup.
 
-Copy [.env.example](.env.example) to `.env` in the project root and configure the values for your environment:
+---
 
-```bash
-cp .env.example .env
-```
+## Running the Application
 
-Then update the variables as needed.
+Choose the launch configuration that matches your current task.
 
-## Database
+### 1. Local Backend Development
 
-A local PostgreSQL container is defined in [docker-compose.database.yaml](docker-compose.database.yaml).
+Use this mode if you are writing Java code. You will run the database in Docker and the application via Gradle for faster feedback loops.
 
-Start it with:
+**Start the database:**
 
 ```bash
 docker compose -f docker-compose.database.yaml up -d
 ```
 
-## Running the application
-
-### With Gradle
+**Run the application:**
 
 ```bash
 ./gradlew bootRun
 ```
 
-The application runs with the profile defined by `SPRING_PROFILES_ACTIVE` and connects to the PostgreSQL database configured in the environment.
+The application will use the profile defined in `SPRING_PROFILES_ACTIVE`.
 
-### With Docker
+### 2. Frontend Development
 
-Use [docker-compose.development.yaml](docker-compose.development.yaml) for to run the backend for frontend development or [docker-compose.yaml](docker-compose.yaml) for production.
+Use this mode if you are developing a frontend and only need the backend to be available as a service without managing the Java environment.
 
-## API documentation
+**Start the backend services:**
 
-After starting the application, the API should be available at:
-
-```text
-http://localhost:8080/api/v1
+```bash
+docker compose -f docker-compose.development.yaml up -d
 ```
 
-You can also use the Swagger UI for API information at:
+### 3. Production
 
-```text
-http://localhost:8080/swagger-ui/index.html
+Use this mode to deploy the backend in a production-ready configuration.
+
+**Start the production:**
+
+```bash
+docker compose up -d
 ```
+
+---
+
+## API Documentation and Access
+
+Once the application is running, you can access the API and its documentation at the following endpoints:
+
+- **Base API URL:** `http://localhost:8080/api/v1`
+- **Swagger UI:** `http://localhost:8080/swagger-ui/index.html`
 
 ## Testing
 
-Run the test suite with:
+To run the automated test suite, execute:
 
 ```bash
 ./gradlew test
