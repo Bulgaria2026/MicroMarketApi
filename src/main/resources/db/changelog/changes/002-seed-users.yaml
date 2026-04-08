@@ -1,0 +1,36 @@
+databaseChangeLog:
+  - changeSet:
+      id: 2
+      author: Lon60
+      context: dev
+      changes:
+        - insert:
+            tableName: users
+            columns:
+              - column:
+                  name: id
+                  value: "a0000000-0000-0000-0000-000000000001"
+              - column:
+                  name: email
+                  value: "admin@micromarket.dev"
+              - column:
+                  name: password
+                  value: "{bcrypt}$2b$10$9JjyEzvZrZmpQA0rLI6dFe6Kpl.qHEOs1jfvZ7YFcG0ApRw6tvmLG" #admin123
+              - column:
+                  name: role
+                  value: "ADMINISTRATOR"
+        - insert:
+            tableName: users
+            columns:
+              - column:
+                  name: id
+                  value: "b0000000-0000-0000-0000-000000000001"
+              - column:
+                  name: email
+                  value: "user@micromarket.dev"
+              - column:
+                  name: password
+                  value: "{bcrypt}$2b$10$ac6H8aEDlCRYtJBuxl5it.odNpanHfeXcYmmJ8mpEJ77SwHSr0PkS" #user123
+              - column:
+                  name: role
+                  value: "USER"
