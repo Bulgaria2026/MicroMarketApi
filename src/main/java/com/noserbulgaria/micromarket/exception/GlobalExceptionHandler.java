@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
 import java.util.stream.Collectors;
@@ -22,9 +23,9 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-  @ExceptionHandler(EntityNotFoundException.class)
+  @ExceptionHandler({EntityNotFoundException.class, NoResourceFoundException.class})
   public ResponseEntity<ApiErrorResponse> handleEntityNotFound(
-      EntityNotFoundException ex,
+      Exception ex,
       WebRequest request) {
     log.warn("Entity not found: {}", ex.getMessage());
 
