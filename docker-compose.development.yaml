@@ -11,7 +11,7 @@ services:
       - micromarket_net
 
   backend:
-    build: .
+    image: ghcr.io/bulgaria2026/micromarketapi:latest
     container_name: micromarket_be
     env_file: .env
     environment:

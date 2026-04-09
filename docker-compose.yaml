@@ -14,7 +14,7 @@ services:
       - pg_data:/var/lib/postgresql
 
   backend:
-    image: micromarket_be:latest
+    image: ghcr.io/bulgaria2026/micromarketapi:latest
     container_name: micromarket_be
     build: .
     environment:
