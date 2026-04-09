@@ -30,5 +30,4 @@ public class AuthController {
     String token = tokenService.generateToken(user);
     return new LoginResponseDTO(token);
   }
-
 }
