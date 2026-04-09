@@ -8,5 +8,5 @@ public interface OrderMapper {
 
     OrderDto entityToDto(Order order);
 
-    OrderItemDto orderItemToDto(OrderItem orderItem);
+    OrderProductDto orderProductToDto(OrderProduct orderProduct);
 }

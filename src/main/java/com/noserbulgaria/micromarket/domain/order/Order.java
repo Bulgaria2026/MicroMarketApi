@@ -18,7 +18,7 @@ import lombok.EqualsAndHashCode;
 
 /**
  * JPA entity representing an order in the system.
- * An order contains information about the customer, its status, and the items ordered.
+ * An order contains information about the customer, its status, and the products ordered.
  */
 @Data
 @Entity
@@ -33,7 +33,7 @@ public class Order extends ExtendedEntity {
     private UUID customerId;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<OrderItem> orderItems = new HashSet<>();
+    private Set<OrderProduct> orderProducts = new HashSet<>();
 
     // TODO: Add PaymentDetails relationship here once the entity is created
 }
