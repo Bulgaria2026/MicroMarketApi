@@ -6,8 +6,8 @@ services:
       POSTGRES_DB: micromarket_db
       POSTGRES_USER: ${DATABASE_USERNAME}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
-    ports:
-      - "5432:5432"
+    networks:
+      - micromarket_net
 
   backend:
     build: .
@@ -19,5 +19,11 @@ services:
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
     depends_on:
       - postgres
+    networks:
+      - micromarket_net
     ports:
       - "8080:8080"
+
+networks:
+  micromarket_net:
+    driver: bridge

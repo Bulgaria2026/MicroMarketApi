@@ -11,7 +11,7 @@ services:
     networks:
       - micromarket_net
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - pg_data:/var/lib/postgresql
 
   backend:
     image: micromarket_be:latest
@@ -22,6 +22,10 @@ services:
       DATABASE_URL: jdbc:postgresql://postgres:5432/micromarket_db
       DATABASE_USERNAME: ${DATABASE_USERNAME}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      JWT_PUBLIC_KEY: file:/etc/secrets/jwt/app.pub
+      JWT_PRIVATE_KEY: file:/etc/secrets/jwt/app.key
+    volumes:
+      - ./secrets/jwt:/etc/secrets/jwt:ro
     depends_on:
       - postgres
     networks:

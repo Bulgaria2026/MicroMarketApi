@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-OUTPUT_DIR="${1:-.}"
+OUTPUT_DIR="${1:-./secrets/jwt}"
 
 mkdir -p "$OUTPUT_DIR"
 
