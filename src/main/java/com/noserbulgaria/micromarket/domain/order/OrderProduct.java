@@ -1,6 +1,7 @@
 package com.noserbulgaria.micromarket.domain.order;
 
 import java.math.BigDecimal;
+
 import com.noserbulgaria.micromarket.generic.ExtendedEntity;
 
 import jakarta.persistence.Column;
@@ -13,14 +14,14 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * JPA entity representing an item within an order.
- * Each item specifies the quantity and the price at the time of purchase.
+ * JPA entity representing an product within an order.
+ * Each product specifies the quantity and the price at the time of purchase.
  */
 @Data
 @EqualsAndHashCode(callSuper = false)
 @Entity
-@Table(name = "order_item")
-public class OrderItem extends ExtendedEntity {
+@Table(name = "order_product")
+public class OrderProduct extends ExtendedEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
