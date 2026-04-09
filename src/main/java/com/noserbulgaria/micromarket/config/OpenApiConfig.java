@@ -35,8 +35,8 @@ public class OpenApiConfig {
             new Info()
                 .title("MicroMarket API")
                 .version("0.0.1-SNAPSHOT")
-                .contact(new Contact().name("Noser Bulgaria")).
-                description("The API to process all requests of the MicroMarket frontend. MicroMarket is a project of Noser Bulgaria")
+                .contact(new Contact().name("Noser Bulgaria"))
+                .description("The API to process all requests of the MicroMarket frontend. MicroMarket is a project of Noser Bulgaria")
         ).components(
             new Components().addSecuritySchemes(
                 "bearerAuth",
