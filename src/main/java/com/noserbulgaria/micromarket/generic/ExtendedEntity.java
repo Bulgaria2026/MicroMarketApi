@@ -2,32 +2,27 @@ package com.noserbulgaria.micromarket.generic;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Data
 @MappedSuperclass
+@EntityListeners(AuditingEntityListener.class)
 public abstract class ExtendedEntity {
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
   private UUID id;
 
+  @CreatedDate
   @Column(nullable = false, updatable = false)
   private Instant createdAt;
 
+  @LastModifiedDate
   @Column(nullable = false)
   private Instant updatedAt;
-
-  @PrePersist
-  protected void onCreate() {
-    createdAt = Instant.now();
-    updatedAt = Instant.now();
-  }
-
-  @PreUpdate
-  protected void onUpdate() {
-    updatedAt = Instant.now();
-  }
 }

@@ -24,6 +24,7 @@ services:
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       JWT_PUBLIC_KEY: file:/etc/secrets/jwt/app.pub
       JWT_PRIVATE_KEY: file:/etc/secrets/jwt/app.key
+      CORS_ALLOWED-ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
     volumes:
       - ./secrets/jwt:/etc/secrets/jwt:ro
     depends_on:
