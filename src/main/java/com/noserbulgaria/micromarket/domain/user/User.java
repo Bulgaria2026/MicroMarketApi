@@ -2,17 +2,13 @@ package com.noserbulgaria.micromarket.domain.user;
 
 import com.noserbulgaria.micromarket.generic.ExtendedEntity;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 
+@Data
 @Entity
 @Table(name = "users")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
+@EqualsAndHashCode(callSuper = true)
 public class User extends ExtendedEntity {
 
   @Column(nullable = false, unique = true)

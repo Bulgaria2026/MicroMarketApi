@@ -1,16 +1,13 @@
 package com.noserbulgaria.micromarket.generic;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.Data;
 
 import java.time.Instant;
 import java.util.UUID;
 
+@Data
 @MappedSuperclass
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
 public abstract class ExtendedEntity {
 
   @Id
