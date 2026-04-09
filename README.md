@@ -19,6 +19,29 @@ The application requires environment variables to run. You can manage these usin
    ```
 2. Update the values in `.env` to match your local setup.
 
+### JWT Keys
+
+The application uses RSA key pairs to sign and verify JWT tokens.
+
+**Development:** No configuration needed. Ephemeral keys are generated automatically at startup. Note that restarting the application invalidates all previously issued tokens since a new key pair is generated each time.
+
+**Production:** A persistent key pair must be provided. The application will refuse to start without one.
+
+Generate the keys:
+
+```bash
+./scripts/generate-jwt-keys.sh
+```
+
+This creates `secrets/jwt/app.key` and `secrets/jwt/app.pub`. The Docker Compose production setup mounts this directory automatically.
+
+For local development with the `prod` profile, configure the keys in your `.env` file:
+
+```properties
+jwt.public.key=file:./secrets/jwt/app.pub
+jwt.private.key=file:./secrets/jwt/app.key
+```
+
 ---
 
 ## Running the Application
@@ -55,7 +78,13 @@ docker compose -f docker-compose.development.yaml up -d
 
 ### 3. Production
 
-Use this mode to deploy the backend in a production-ready configuration.
+Use this mode to deploy the full stack in a production-ready configuration.
+
+**Generate JWT keys** (if not already done):
+
+```bash
+./scripts/generate-jwt-keys.sh
+```
 
 **Start the production:**
 
@@ -70,7 +99,7 @@ docker compose up -d
 Once the application is running, you can access the API and its documentation at the following endpoints:
 
 - **Base API URL:** `http://localhost:8080/api/v1`
-- **Swagger UI:** `http://localhost:8080/swagger-ui/index.html`
+- **Swagger UI:** `http://localhost:8080/api/v1/swagger-ui/index.html` (dev profile only)
 
 ## Testing
 
