@@ -1,6 +1,5 @@
-package com.noserbulgaria.micromarket.auth;
+package com.noserbulgaria.micromarket.security.user;
 
-import com.noserbulgaria.micromarket.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NullMarked;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -8,6 +7,9 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
+/**
+ * Loads user details by email address for Spring Security authentication.
+ */
 @Service
 @NullMarked
 @RequiredArgsConstructor
