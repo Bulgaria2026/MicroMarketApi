@@ -1,4 +1,4 @@
-package com.noserbulgaria.micromarket.domain.user;
+package com.noserbulgaria.micromarket.security.user;
 
 import com.noserbulgaria.micromarket.generic.ExtendedEntity;
 import jakarta.persistence.*;

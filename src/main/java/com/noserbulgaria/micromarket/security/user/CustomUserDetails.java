@@ -1,6 +1,5 @@
-package com.noserbulgaria.micromarket.auth;
+package com.noserbulgaria.micromarket.security.user;
 
-import com.noserbulgaria.micromarket.domain.user.User;
 import org.jspecify.annotations.NullMarked;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -9,6 +8,10 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.util.Collection;
 import java.util.List;
 
+/**
+ * Adapts the {@link User} entity to Spring Security's {@link UserDetails} contract,
+ * mapping the user's {@link Role} to a granted authority.
+ */
 @NullMarked
 public record CustomUserDetails(User user) implements UserDetails {
 
