@@ -13,6 +13,9 @@ public class OrderSpecification extends ExtendedSpecification<Order> {
 
   @Override
   public Specification<Order> withFilter() {
-    return Specification.where(fromDate(filter.fromDate())).and(toDate(filter.toDate())).and(equalTo(filter.customerId(), "customerId")).and(equalTo(filter.status(), "status"));
+    return Specification.where(fromDate(filter.fromDate()))
+        .and(toDate(filter.toDate()))
+        .and(equalTo(filter.customerId(), "customerId"))
+        .and(equalTo(filter.status(), "status"));
   }
 }
