@@ -33,7 +33,7 @@ databaseChangeLog:
       author: Cyrill Weber
       changes:
         - createTable:
-            tableName: order_product
+            tableName: order_item
             columns:
               - column:
                   name: id
@@ -46,7 +46,7 @@ databaseChangeLog:
                   type: uuid
                   constraints:
                     nullable: false
-                    foreignKeyName: fk_order_product_order
+                    foreignKeyName: fk_order_item_order
                     references: orders(id)
               - column:
                   name: quantity

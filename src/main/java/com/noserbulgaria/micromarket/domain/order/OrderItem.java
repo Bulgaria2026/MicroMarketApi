@@ -9,20 +9,17 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
-/**
- * JPA entity representing an product within an order.
- * Each product specifies the quantity and the price at the time of purchase.
- */
 @Data
-@EqualsAndHashCode(callSuper = false)
 @Entity
-@Table(name = "order_product")
-public class OrderProduct extends ExtendedEntity {
+@EqualsAndHashCode(callSuper = false)
+public class OrderItem extends ExtendedEntity {
 
+    @EqualsAndHashCode.Exclude
+    @ToString.Exclude
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
