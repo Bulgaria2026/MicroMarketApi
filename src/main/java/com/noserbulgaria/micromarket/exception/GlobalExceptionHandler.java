@@ -1,8 +1,8 @@
 package com.noserbulgaria.micromarket.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.coyote.BadRequestException;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -40,12 +40,33 @@ public class GlobalExceptionHandler {
     return new ResponseEntity<>(error, HttpStatus.NOT_FOUND);
   }
 
-  @ExceptionHandler(InsufficientQuantityException.class)
-  public ResponseEntity<ApiErrorResponse> handleInsufficientQuantity(
-      InsufficientQuantityException ex,
+  //region BadRequestException
+  // separated for readability and less generic response messages
+  @ExceptionHandler(MethodArgumentNotValidException.class)
+  public ResponseEntity<ApiErrorResponse> handleValidationException(
+      MethodArgumentNotValidException ex,
       WebRequest request) {
-    log.warn("Insufficient quantity: {}", ex.getMessage());
+    String message = ex.getBindingResult()
+        .getFieldErrors()
+        .stream()
+        .map(error -> error.getField() + ": " + error.getDefaultMessage())
+        .collect(Collectors.joining(", "));
 
+    ApiErrorResponse error = new ApiErrorResponse(
+        Instant.now(),
+        HttpStatus.BAD_REQUEST.value(),
+        "Validation Failed",
+        message,
+        request.getDescription(false).replace("uri=", "")
+    );
+
+    return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+  }
+
+  @ExceptionHandler(BadRequestException.class)
+  public ResponseEntity<ApiErrorResponse> handleBadRequestException(
+      BadRequestException ex,
+      WebRequest request) {
     ApiErrorResponse error = new ApiErrorResponse(
         Instant.now(),
         HttpStatus.BAD_REQUEST.value(),
@@ -56,29 +77,7 @@ public class GlobalExceptionHandler {
 
     return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
   }
-
-  @ExceptionHandler(MethodArgumentNotValidException.class)
-  public ResponseEntity<ApiErrorResponse> handleValidationException(
-      MethodArgumentNotValidException ex,
-      WebRequest request) {
-    log.warn("Validation error: {}", ex.getMessage());
-
-    String message = ex.getBindingResult()
-        .getFieldErrors()
-        .stream()
-        .map(error -> error.getField() + ": " + error.getDefaultMessage())
-        .collect(Collectors.joining(", "));
-
-    ApiErrorResponse error = new ApiErrorResponse(
-        Instant.now(),
-        422,
-        "Validation Failed",
-        message,
-        request.getDescription(false).replace("uri=", "")
-    );
-
-    return new ResponseEntity<>(error, HttpStatusCode.valueOf(422));
-  }
+  //endregion
 
   @ExceptionHandler(BadCredentialsException.class)
   public ResponseEntity<ApiErrorResponse> handleBadCredentials(
