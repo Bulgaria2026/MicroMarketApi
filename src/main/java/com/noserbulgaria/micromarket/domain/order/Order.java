@@ -23,16 +23,16 @@ import lombok.ToString;
 @EqualsAndHashCode(callSuper = false)
 public class Order extends ExtendedEntity {
 
-    @Enumerated(EnumType.STRING)
-    private OrderStatusType status;
+  @Enumerated(EnumType.STRING)
+  private OrderStatusType status;
 
-    @Column(nullable = false)
-    private UUID customerId;
+  @Column(nullable = false)
+  private UUID customerId;
 
-    @EqualsAndHashCode.Exclude
-    @ToString.Exclude
-    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<OrderItem> orderItems = new HashSet<>();
+  @EqualsAndHashCode.Exclude
+  @ToString.Exclude
+  @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+  private Set<OrderItem> orderItems = new HashSet<>();
 
-    // TODO: Add PaymentDetails relationship here once the entity is created
+  // TODO: Add PaymentDetails relationship here once the entity is created
 }

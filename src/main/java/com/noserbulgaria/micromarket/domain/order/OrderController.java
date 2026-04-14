@@ -36,8 +36,7 @@ public class OrderController {
   @GetMapping
   @Operation(summary = "List all orders", description = "Retrieves a paginated list of orders. Can be filtered by date range, customer ID, or order status. Restricted to ADMINISTRATOR.")
   @ApiResponse(responseCode = "200", description = "Successfully retrieved list")
-  public Page<OrderDto> findAll(
-                                @ParameterObject Pageable pageable, @ParameterObject OrderFilterRequest filter) {
+  public Page<OrderDto> findAll(@ParameterObject Pageable pageable, @ParameterObject OrderFilterRequest filter) {
     return orderService.findAll(pageable, filter).map(orderMapper::entityToDto);
   }
 
@@ -48,7 +47,9 @@ public class OrderController {
   @ApiResponse(responseCode = "200", description = "Successfully retrieved order")
   @ApiResponse(responseCode = "404", description = "Order not found")
   public OrderDto findById(@PathVariable UUID id) {
-    return orderService.findById(id).map(orderMapper::entityToDto).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+    return orderService.findById(id).map(
+        orderMapper::entityToDto).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found")
+    );
   }
 
 }

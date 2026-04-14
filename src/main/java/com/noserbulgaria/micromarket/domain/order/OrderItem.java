@@ -18,17 +18,17 @@ import lombok.ToString;
 @EqualsAndHashCode(callSuper = false)
 public class OrderItem extends ExtendedEntity {
 
-    @EqualsAndHashCode.Exclude
-    @ToString.Exclude
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", nullable = false)
-    private Order order;
+  @EqualsAndHashCode.Exclude
+  @ToString.Exclude
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "order_id", nullable = false)
+  private Order order;
 
-    // TODO: Add Product relationship here once the entity is created
+  // TODO: Add Product relationship here once the entity is created
 
-    @Column(nullable = false)
-    private Integer quantity;
+  @Column(nullable = false)
+  private Integer quantity;
 
-    @Column(nullable = false)
-    private BigDecimal priceAtPurchase;
+  @Column(nullable = false)
+  private BigDecimal priceAtPurchase;
 }
