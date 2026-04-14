@@ -36,7 +36,7 @@ databaseChangeLog:
                   name: created_at
                   valueDate: "2023-10-02T14:15:00"
         - insert:
-            tableName: order_product
+            tableName: order_item
             columns:
               - column:
                   name: id
@@ -55,7 +55,7 @@ databaseChangeLog:
                   valueDate: "2023-10-01T10:30:00"
 
         - insert:
-            tableName: order_product
+            tableName: order_item
             columns:
               - column:
                   name: id

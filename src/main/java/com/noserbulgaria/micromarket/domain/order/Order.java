@@ -15,11 +15,8 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
-/**
- * JPA entity representing an order in the system.
- * An order contains information about the customer, its status, and the products ordered.
- */
 @Data
 @Entity
 @Table(name = "orders")
@@ -32,8 +29,10 @@ public class Order extends ExtendedEntity {
     @Column(nullable = false)
     private UUID customerId;
 
+    @EqualsAndHashCode.Exclude
+    @ToString.Exclude
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<OrderProduct> orderProducts = new HashSet<>();
+    private Set<OrderItem> orderItems = new HashSet<>();
 
     // TODO: Add PaymentDetails relationship here once the entity is created
 }
