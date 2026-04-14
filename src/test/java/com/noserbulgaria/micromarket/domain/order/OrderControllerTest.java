@@ -4,6 +4,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -18,7 +19,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
 import com.noserbulgaria.micromarket.security.user.UserRepository;
-
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -52,25 +52,50 @@ class OrderControllerTest {
     testOrder = new Order();
     testOrder.setStatus(OrderStatusType.PENDING);
     testOrder.setCustomerId(testUser.getId());
+
+    OrderItem item = new OrderItem();
+    item.setOrder(testOrder);
+    item.setQuantity(2);
+    item.setPriceAtPurchase(new BigDecimal("10.50"));
+    testOrder.getOrderItems().add(item);
+
     testOrder = orderRepository.saveAndFlush(testOrder);
   }
 
   @Test
   @WithMockUser(roles = "USER")
   void getOrdersAsUser_returnsForbidden() throws Exception {
-    mockMvc.perform(get("/orders")).andExpect(status().isForbidden());
+    mockMvc.perform(get("/order")).andExpect(status().isForbidden());
   }
 
   @Test
   @WithMockUser(roles = "USER")
   void getOrderByIdAsUser_returnsForbidden() throws Exception {
-    mockMvc.perform(get("/orders/{id}", UUID.randomUUID())).andExpect(status().isForbidden());
+    mockMvc.perform(get("/order/{id}", UUID.randomUUID())).andExpect(status().isForbidden());
   }
 
   @Test
   @WithMockUser(roles = "ADMINISTRATOR")
   void getOrdersAsAdministrator_returnsOk() throws Exception {
-    mockMvc.perform(get("/orders")).andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()));
+    mockMvc.perform(get("/order"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()))
+        .andExpect(jsonPath("$.content[0].orderItems").isArray())
+        .andExpect(jsonPath("$.content[0].orderItems.length()").value(1))
+        .andExpect(jsonPath("$.content[0].orderItems[0].quantity").value(2))
+        .andExpect(jsonPath("$.content[0].orderItems[0].priceAtPurchase").value(10.5));
+  }
+
+  @Test
+  @WithMockUser(roles = "ADMINISTRATOR")
+  void getOrderByIdAsAdministrator_returnsOk() throws Exception {
+    mockMvc.perform(get("/order/{id}", testOrder.getId()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(testOrder.getId().toString()))
+        .andExpect(jsonPath("$.orderItems").isArray())
+        .andExpect(jsonPath("$.orderItems.length()").value(1))
+        .andExpect(jsonPath("$.orderItems[0].quantity").value(2))
+        .andExpect(jsonPath("$.orderItems[0].priceAtPurchase").value(10.5));
   }
 
   @Test
@@ -81,12 +106,17 @@ class OrderControllerTest {
     filteredOut.setCustomerId(testUser.getId());
     orderRepository.saveAndFlush(filteredOut);
 
-    mockMvc.perform(get("/orders").param("status", OrderStatusType.PENDING.name())).andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(1)).andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()));
+    mockMvc.perform(get("/order").param("status", OrderStatusType.PENDING.name()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()))
+        .andExpect(jsonPath("$.content[0].orderItems.length()").value(1))
+        .andExpect(jsonPath("$.content[0].orderItems[0].quantity").value(2));
   }
 
   @Test
   @WithMockUser(roles = "ADMINISTRATOR")
   void getMissingOrderAsAdministrator_returnsNotFound() throws Exception {
-    mockMvc.perform(get("/orders/{id}", UUID.randomUUID())).andExpect(status().isNotFound());
+    mockMvc.perform(get("/order/{id}", UUID.randomUUID())).andExpect(status().isNotFound());
   }
 }

@@ -24,6 +24,7 @@ import lombok.ToString;
 public class Order extends ExtendedEntity {
 
   @Enumerated(EnumType.STRING)
+  @Column(nullable = false)
   private OrderStatusType status;
 
   @Column(nullable = false)
