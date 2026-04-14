@@ -27,6 +27,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.boot:spring-boot-starter-liquibase'
     implementation 'org.hibernate.orm:hibernate-envers'
+    implementation 'org.springframework.data:spring-data-envers'
 
     // Databases & Dev Tools
     implementation 'org.springframework.boot:spring-boot-h2console'
