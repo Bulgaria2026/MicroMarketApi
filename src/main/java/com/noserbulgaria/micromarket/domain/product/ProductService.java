@@ -36,7 +36,7 @@ public interface ProductService extends ExtendedService<Product, ProductDto> {
    * Updates a product or throws if it does not exist.
    *
    * @param id the product ID
-   * @param productDto the new product state
+   * @param productWriteDto the new product state
    * @return the updated product DTO
    */
   ProductDto updateOrThrow(UUID id, ProductWriteDto productWriteDto);
