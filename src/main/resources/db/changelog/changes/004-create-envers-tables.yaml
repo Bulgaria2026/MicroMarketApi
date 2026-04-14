@@ -1,0 +1,87 @@
+databaseChangeLog:
+  - changeSet:
+      id: 4
+      author: Codex
+      changes:
+        - createSequence:
+            sequenceName: revinfo_seq
+            startValue: 1
+            incrementBy: 50
+
+        - createTable:
+            tableName: revinfo
+            columns:
+              - column:
+                  name: rev
+                  type: integer
+                  defaultValueSequenceNext: revinfo_seq
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+
+              - column:
+                  name: revtstmp
+                  type: bigint
+
+        - createTable:
+            tableName: product_aud
+            columns:
+              - column:
+                  name: rev
+                  type: integer
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: revtype
+                  type: smallint
+
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: name
+                  type: varchar(255)
+
+              - column:
+                  name: description
+                  type: varchar(1000)
+
+              - column:
+                  name: price
+                  type: double
+
+              - column:
+                  name: discount
+                  type: double
+
+              - column:
+                  name: enabled
+                  type: boolean
+
+              - column:
+                  name: amount
+                  type: bigint
+
+              - column:
+                  name: created_at
+                  type: timestamp
+
+              - column:
+                  name: updated_at
+                  type: timestamp
+
+        - addPrimaryKey:
+            tableName: product_aud
+            columnNames: rev, id
+            constraintName: pk_product_aud
+
+        - addForeignKeyConstraint:
+            baseTableName: product_aud
+            baseColumnNames: rev
+            referencedTableName: revinfo
+            referencedColumnNames: rev
+            constraintName: fk_product_aud_revinfo
