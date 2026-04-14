@@ -5,11 +5,12 @@ import com.noserbulgaria.micromarket.generic.ExtendedMapper;
 import org.mapstruct.Builder;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingConstants;
 import org.mapstruct.MappingTarget;
 import org.mapstruct.ReportingPolicy;
 
 @Mapper(
-    componentModel = "spring",
+    componentModel = MappingConstants.ComponentModel.SPRING,
     unmappedTargetPolicy = ReportingPolicy.ERROR,
     builder = @Builder(disableBuilder = true)
 )
