@@ -42,16 +42,12 @@ public class ProductServiceImpl extends ExtendedServiceImpl<Product, ProductDto,
 
   @Override
   public ProductDto create(ProductWriteDto dto) {
-    Product product = new Product();
-    applyMutableFields(product, dto);
-    return toProductDto(productRepository.save(product));
+    return toProductDto(productRepository.save(super.mapper.toEntity(dto)));
   }
 
   @Override
   public ProductDto create(ProductDto dto) {
-    Product product = new Product();
-    applyMutableFields(product, dto);
-    return toProductDto(productRepository.save(product));
+    return toProductDto(productRepository.save(super.mapper.dtoToEntity(dto)));
   }
 
   @Override
@@ -101,7 +97,7 @@ public class ProductServiceImpl extends ExtendedServiceImpl<Product, ProductDto,
   public Optional<ProductDto> update(UUID id, ProductDto dto) {
     return productRepository.findById(id)
         .map(existing -> {
-          applyMutableFields(existing, dto);
+          super.mapper.updateProductFromDto(dto, existing);
           return toProductDto(productRepository.save(existing));
         });
   }
@@ -109,7 +105,7 @@ public class ProductServiceImpl extends ExtendedServiceImpl<Product, ProductDto,
   @Override
   public ProductDto updateOrThrow(UUID id, ProductWriteDto dto) {
     Product product = findProductByIdOrThrow(id);
-    applyMutableFields(product, dto);
+    super.mapper.updateProductFromWriteDto(dto, product);
     return toProductDto(productRepository.save(product));
   }
 
@@ -169,24 +165,6 @@ public class ProductServiceImpl extends ExtendedServiceImpl<Product, ProductDto,
   private Product findProductByIdOrThrow(UUID id) {
     return productRepository.findById(id)
         .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
-  }
-
-  private void applyMutableFields(Product product, ProductWriteDto dto) {
-    product.setName(dto.name());
-    product.setDescription(dto.description());
-    product.setPrice(dto.price());
-    product.setDiscount(dto.discount());
-    product.setEnabled(dto.enabled());
-    product.setAmount(dto.amount());
-  }
-
-  private void applyMutableFields(Product product, ProductDto dto) {
-    product.setName(dto.name());
-    product.setDescription(dto.description());
-    product.setPrice(dto.price());
-    product.setDiscount(dto.discount());
-    product.setEnabled(dto.enabled());
-    product.setAmount(dto.amount());
   }
 
   private void deleteAuditHistory(UUID productId) {

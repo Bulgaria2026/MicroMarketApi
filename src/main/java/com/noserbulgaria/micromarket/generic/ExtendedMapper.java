@@ -50,5 +50,4 @@ public interface ExtendedMapper<T extends ExtendedEntity, D extends ExtendedDto>
    * @return the set of entities
    */
   Set<T> dtoSetToEntity(Set<D> dtoSet);
-
 }
