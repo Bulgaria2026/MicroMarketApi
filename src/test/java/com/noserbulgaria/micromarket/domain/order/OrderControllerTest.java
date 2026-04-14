@@ -15,9 +15,10 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.noserbulgaria.micromarket.domain.user.Role;
-import com.noserbulgaria.micromarket.domain.user.User;
-import com.noserbulgaria.micromarket.domain.user.UserRepository;
+import com.noserbulgaria.micromarket.security.user.Role;
+import com.noserbulgaria.micromarket.security.user.User;
+import com.noserbulgaria.micromarket.security.user.UserRepository;
+
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -57,23 +58,19 @@ class OrderControllerTest {
   @Test
   @WithMockUser(roles = "USER")
   void getOrdersAsUser_returnsForbidden() throws Exception {
-    mockMvc.perform(get("/orders"))
-        .andExpect(status().isForbidden());
+    mockMvc.perform(get("/orders")).andExpect(status().isForbidden());
   }
 
   @Test
   @WithMockUser(roles = "USER")
   void getOrderByIdAsUser_returnsForbidden() throws Exception {
-    mockMvc.perform(get("/orders/{id}", UUID.randomUUID()))
-        .andExpect(status().isForbidden());
+    mockMvc.perform(get("/orders/{id}", UUID.randomUUID())).andExpect(status().isForbidden());
   }
 
   @Test
   @WithMockUser(roles = "ADMINISTRATOR")
   void getOrdersAsAdministrator_returnsOk() throws Exception {
-    mockMvc.perform(get("/orders"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()));
+    mockMvc.perform(get("/orders")).andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()));
   }
 
   @Test
@@ -84,16 +81,12 @@ class OrderControllerTest {
     filteredOut.setCustomerId(testUser.getId());
     orderRepository.saveAndFlush(filteredOut);
 
-    mockMvc.perform(get("/orders").param("status", OrderStatusType.PENDING.name()))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.content.length()").value(1))
-        .andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()));
+    mockMvc.perform(get("/orders").param("status", OrderStatusType.PENDING.name())).andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(1)).andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()));
   }
 
   @Test
   @WithMockUser(roles = "ADMINISTRATOR")
   void getMissingOrderAsAdministrator_returnsNotFound() throws Exception {
-    mockMvc.perform(get("/orders/{id}", UUID.randomUUID()))
-        .andExpect(status().isNotFound());
+    mockMvc.perform(get("/orders/{id}", UUID.randomUUID())).andExpect(status().isNotFound());
   }
 }
