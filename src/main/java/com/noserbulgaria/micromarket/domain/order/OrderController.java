@@ -2,6 +2,7 @@ package com.noserbulgaria.micromarket.domain.order;
 
 import java.util.UUID;
 
+import com.noserbulgaria.micromarket.domain.order.dto.OrderMapper;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
