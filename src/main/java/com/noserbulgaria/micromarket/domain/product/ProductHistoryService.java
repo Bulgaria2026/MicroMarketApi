@@ -1,17 +1,12 @@
 package com.noserbulgaria.micromarket.domain.product;
 
 import com.noserbulgaria.micromarket.domain.product.dto.ProductHistoryDto;
-import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
-import org.hibernate.envers.AuditReader;
-import org.hibernate.envers.AuditReaderFactory;
-import org.hibernate.envers.DefaultRevisionEntity;
-import org.hibernate.envers.RevisionType;
-import org.hibernate.envers.query.AuditEntity;
+import org.springframework.data.history.Revision;
+import org.springframework.data.history.Revisions;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -20,27 +15,18 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class ProductHistoryService {
 
-  private final EntityManager entityManager;
+  private final ProductRepository productRepository;
 
   public List<ProductHistoryDto> findHistoryByProductId(UUID productId) {
-    AuditReader auditReader = AuditReaderFactory.get(entityManager);
-
-    @SuppressWarnings("unchecked")
-    List<Object[]> revisions = auditReader.createQuery()
-        .forRevisionsOfEntity(Product.class, false, true)
-        .add(AuditEntity.id().eq(productId))
-        .addOrder(AuditEntity.revisionNumber().desc())
-        .getResultList();
+    Revisions<Integer, Product> revisions = productRepository.findRevisions(productId);
 
     return revisions.stream()
         .map(this::toHistoryDto)
         .toList();
   }
 
-  private ProductHistoryDto toHistoryDto(Object[] revisionRow) {
-    Product product = (Product) revisionRow[0];
-    DefaultRevisionEntity revision = (DefaultRevisionEntity) revisionRow[1];
-    RevisionType revisionType = (RevisionType) revisionRow[2];
+  private ProductHistoryDto toHistoryDto(Revision<Integer, Product> revision) {
+    Product product = revision.getEntity();
 
     return new ProductHistoryDto(
         product.getId(),
@@ -52,9 +38,9 @@ public class ProductHistoryService {
         product.getDiscount(),
         product.getEnabled(),
         product.getAmount(),
-        (long) revision.getId(),
-        Instant.ofEpochMilli(revision.getTimestamp()),
-        revisionType.name()
+        revision.getRequiredRevisionNumber().longValue(),
+        revision.getMetadata().getRequiredRevisionInstant(),
+        revision.getMetadata().getRevisionType().name()
     );
   }
 }
