@@ -8,12 +8,14 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import org.hibernate.envers.Audited;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
+@Audited
 @EqualsAndHashCode(callSuper = true)
 public class Product extends ExtendedEntity {
 
@@ -31,4 +33,7 @@ public class Product extends ExtendedEntity {
 
   @Column(nullable = false)
   private Boolean enabled;
+
+  @Column(nullable = false)
+  private Long amount;
 }

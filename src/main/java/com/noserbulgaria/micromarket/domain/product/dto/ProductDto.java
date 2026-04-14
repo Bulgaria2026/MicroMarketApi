@@ -6,17 +6,15 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 
 import java.time.Instant;
 import java.util.UUID;
 
-
 public record ProductDto(
 
-    @NotNull
     UUID id,
 
-    @NotNull
     Instant createdAt,
 
     Instant updatedAt,
@@ -37,6 +35,10 @@ public record ProductDto(
     Double discount,
 
     @NotNull(message = "Enabled status must not be null")
-    Boolean enabled
+    Boolean enabled,
+
+    @NotNull(message = "Amount must not be null")
+    @PositiveOrZero(message = "Amount must be zero or greater")
+    Long amount
 
 ) implements ExtendedDto {}
