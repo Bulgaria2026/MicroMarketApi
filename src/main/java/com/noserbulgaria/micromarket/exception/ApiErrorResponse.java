@@ -5,7 +5,7 @@ import java.time.Instant;
 /**
  * Standard error response DTO for API error responses.
  */
-public record ApiErrorResponse (
+public record ApiErrorResponse(
     Instant timestamp,
     int status,
     String error,
