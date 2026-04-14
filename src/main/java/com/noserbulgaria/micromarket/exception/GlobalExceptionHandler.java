@@ -1,5 +1,6 @@
 package com.noserbulgaria.micromarket.exception;
 
+import com.noserbulgaria.micromarket.security.auth.exception.DuplicateEmailException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -75,6 +76,21 @@ public class GlobalExceptionHandler {
     );
 
     return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+  }
+
+  @ExceptionHandler(DuplicateEmailException.class)
+  public ResponseEntity<ApiErrorResponse> handleDuplicateEmailException(
+      DuplicateEmailException ex,
+      WebRequest request) {
+    ApiErrorResponse error = new ApiErrorResponse(
+        Instant.now(),
+        HttpStatus.CONFLICT.value(),
+        "Conflict",
+        ex.getMessage(),
+        request.getDescription(false).replace("uri=", "")
+    );
+
+    return new ResponseEntity<>(error, HttpStatus.CONFLICT);
   }
   //endregion
 
