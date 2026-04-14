@@ -17,7 +17,7 @@ public class OrderServiceImpl implements OrderService {
   private final OrderRepository orderRepository;
 
   @Override
-  public Page<Order> findAll(Pageable pageable, OrderFilterRequest filter) {
+  public Page<Order> findAll(Pageable pageable, OrderFilter filter) {
     Specification<Order> spec = new OrderSpecification(filter).withFilter();
     return orderRepository.findAll(spec, pageable);
   }

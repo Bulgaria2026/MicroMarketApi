@@ -8,7 +8,7 @@ import org.springframework.data.domain.Pageable;
 
 public interface OrderService {
 
-  Page<Order> findAll(Pageable pageable, OrderFilterRequest filter);
+  Page<Order> findAll(Pageable pageable, OrderFilter filter);
 
   Optional<Order> findById(UUID id);
 }

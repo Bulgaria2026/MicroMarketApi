@@ -9,7 +9,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class OrderSpecification extends ExtendedSpecification<Order> {
 
-  private final OrderFilterRequest filter;
+  private final OrderFilter filter;
 
   @Override
   public Specification<Order> withFilter() {
