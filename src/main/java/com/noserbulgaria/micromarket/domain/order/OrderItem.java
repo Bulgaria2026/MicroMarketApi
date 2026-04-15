@@ -1,9 +1,7 @@
 package com.noserbulgaria.micromarket.domain.order;
 
-import java.math.BigDecimal;
-
+import com.noserbulgaria.micromarket.domain.product.Product;
 import com.noserbulgaria.micromarket.generic.ExtendedEntity;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -12,6 +10,8 @@ import jakarta.persistence.ManyToOne;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
+
+import java.math.BigDecimal;
 
 @Data
 @Entity
@@ -25,7 +25,11 @@ public class OrderItem extends ExtendedEntity {
   @JoinColumn(name = "order_id", nullable = false)
   private Order order;
 
-  // TODO: Add Product relationship here once the entity is created
+  @EqualsAndHashCode.Exclude
+  @ToString.Exclude
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "product_id", nullable = false)
+  private Product product;
 
   @Column(nullable = false)
   private Integer quantity;
