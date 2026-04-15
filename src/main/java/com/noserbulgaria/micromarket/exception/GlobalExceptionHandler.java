@@ -5,10 +5,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
@@ -78,6 +82,24 @@ public class GlobalExceptionHandler {
     return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
   }
 
+  @ExceptionHandler({
+      MethodArgumentTypeMismatchException.class,
+      MissingServletRequestParameterException.class
+  })
+  public ResponseEntity<ApiErrorResponse> handleRequestBindingException(
+      Exception ex,
+      WebRequest request) {
+    ApiErrorResponse error = new ApiErrorResponse(
+        Instant.now(),
+        HttpStatus.BAD_REQUEST.value(),
+        "Bad Request",
+        ex.getMessage(),
+        request.getDescription(false).replace("uri=", "")
+    );
+
+    return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+  }
+
   @ExceptionHandler(DuplicateEmailException.class)
   public ResponseEntity<ApiErrorResponse> handleDuplicateEmailException(
       DuplicateEmailException ex,
@@ -94,6 +116,21 @@ public class GlobalExceptionHandler {
   }
   //endregion
 
+  @ExceptionHandler(AccessDeniedException.class)
+  public ResponseEntity<ApiErrorResponse> handleAccessDenied(
+      AccessDeniedException ex,
+      WebRequest request) {
+    ApiErrorResponse error = new ApiErrorResponse(
+        Instant.now(),
+        HttpStatus.FORBIDDEN.value(),
+        "Forbidden",
+        ex.getMessage(),
+        request.getDescription(false).replace("uri=", "")
+    );
+
+    return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
+  }
+
   @ExceptionHandler(BadCredentialsException.class)
   public ResponseEntity<ApiErrorResponse> handleBadCredentials(
       BadCredentialsException ex,
@@ -109,6 +146,37 @@ public class GlobalExceptionHandler {
     );
 
     return new ResponseEntity<>(error, HttpStatus.UNAUTHORIZED);
+  }
+
+  @ExceptionHandler(UnauthorizedException.class)
+  public ResponseEntity<ApiErrorResponse> handleUnauthorized(
+      UnauthorizedException ex,
+      WebRequest request) {
+    ApiErrorResponse error = new ApiErrorResponse(
+        Instant.now(),
+        HttpStatus.UNAUTHORIZED.value(),
+        "Unauthorized",
+        ex.getMessage(),
+        request.getDescription(false).replace("uri=", "")
+    );
+
+    return new ResponseEntity<>(error, HttpStatus.UNAUTHORIZED);
+  }
+
+  @ExceptionHandler(ResponseStatusException.class)
+  public ResponseEntity<ApiErrorResponse> handleResponseStatusException(
+      ResponseStatusException ex,
+      WebRequest request) {
+    HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
+    ApiErrorResponse error = new ApiErrorResponse(
+        Instant.now(),
+        status.value(),
+        status.getReasonPhrase(),
+        ex.getReason(),
+        request.getDescription(false).replace("uri=", "")
+    );
+
+    return new ResponseEntity<>(error, status);
   }
 
   @ExceptionHandler(Exception.class)
