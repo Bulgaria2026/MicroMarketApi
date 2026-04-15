@@ -15,6 +15,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -35,7 +36,7 @@ public class AuthServiceImpl implements AuthService {
 
     User user = new User();
     user.setEmail(request.email());
-    user.setPassword(passwordEncoder.encode(request.password()));
+    user.setPassword(Objects.requireNonNull(passwordEncoder.encode(request.password())));
     user.setRole(Role.USER);
     user = userRepository.save(user);
 

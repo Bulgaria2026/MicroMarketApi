@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '4.0.5'
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'net.ltgt.errorprone' version '5.1.0'
 }
 
 group = 'com.noser-bulgaria'
@@ -43,6 +44,25 @@ dependencies {
     testAnnotationProcessor 'org.projectlombok:lombok'
     testAnnotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
     testAnnotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
+
+    errorprone 'com.google.errorprone:error_prone_core:2.49.0'
+    errorprone 'com.uber.nullaway:nullaway:0.13.3'
+}
+
+import net.ltgt.gradle.errorprone.CheckSeverity
+
+tasks.withType(JavaCompile).configureEach {
+    options.errorprone {
+        disableAllChecks = true
+        checks.put('NullAway', CheckSeverity.ERROR)
+        option('NullAway:OnlyNullMarked', 'true')
+        option('NullAway:JSpecifyMode', 'true')
+        option('NullAway:TreatGeneratedAsUnannotated', 'true')
+    }
+}
+
+tasks.withType(JavaCompile).matching { it.name.toLowerCase().contains('test') }.configureEach {
+    options.errorprone.enabled = false
 }
 
 tasks.named('test') {

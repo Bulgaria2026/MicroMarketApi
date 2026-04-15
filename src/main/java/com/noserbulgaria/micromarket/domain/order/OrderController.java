@@ -1,7 +1,11 @@
 package com.noserbulgaria.micromarket.domain.order;
 
-import java.util.UUID;
-
+import com.noserbulgaria.micromarket.domain.order.dto.OrderMapper;
+import com.noserbulgaria.micromarket.domain.order.dto.OrderResponseDTO;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,13 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.noserbulgaria.micromarket.domain.order.dto.OrderMapper;
-import com.noserbulgaria.micromarket.domain.order.dto.OrderResponseDTO;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
+import java.util.UUID;
 
 @Tag(name = "Orders", description = "Order management API")
 @RestController
@@ -53,7 +51,7 @@ public class OrderController {
   public OrderResponseDTO findById(@PathVariable UUID id) {
     return orderService.findById(id).map(
         orderMapper::entityToDto).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found")
-        );
+    );
   }
 
 }

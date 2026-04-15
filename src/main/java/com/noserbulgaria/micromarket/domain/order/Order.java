@@ -21,6 +21,7 @@ import lombok.ToString;
 @Entity
 @Table(name = "orders")
 @EqualsAndHashCode(callSuper = false)
+@SuppressWarnings("NullAway.Init")
 public class Order extends ExtendedEntity {
 
   @Enumerated(EnumType.STRING)
