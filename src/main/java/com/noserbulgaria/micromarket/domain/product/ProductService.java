@@ -4,7 +4,9 @@ import com.noserbulgaria.micromarket.domain.product.dto.ProductDto;
 import com.noserbulgaria.micromarket.domain.product.dto.ProductWithHistoryDto;
 import com.noserbulgaria.micromarket.domain.product.dto.ProductWriteDto;
 import com.noserbulgaria.micromarket.generic.ExtendedService;
-import org.springframework.security.core.Authentication;
+import com.noserbulgaria.micromarket.security.user.CustomUserDetails;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.UUID;
@@ -13,6 +15,7 @@ import java.util.UUID;
  * Service interface for Product entity operations. Extends the generic ExtendedService to provide Product-specific
  * functionality.
  */
+@NullMarked
 public interface ProductService extends ExtendedService<Product, ProductDto> {
 
   ProductDto create(ProductWriteDto productWriteDto);
@@ -23,11 +26,11 @@ public interface ProductService extends ExtendedService<Product, ProductDto> {
    * Anonymous and non-admin callers receive the public product DTO and cannot see disabled products. Administrators
    * receive the full DTO including history and disabled products.
    *
-   * @param id             the product ID
-   * @param authentication the current authentication, or {@code null} for anonymous requests
+   * @param id          the product ID
+   * @param userDetails the current userDetails, or {@code null} for anonymous requests
    * @return the DTO visible to the current caller
    */
-  ProductWithHistoryDto getByIdForCurrentUser(UUID id, Authentication authentication);
+  ProductWithHistoryDto getByIdForCurrentUser(UUID id, @Nullable CustomUserDetails userDetails);
 
   /**
    * Returns the product visible to the current caller when searching by name.
@@ -35,11 +38,11 @@ public interface ProductService extends ExtendedService<Product, ProductDto> {
    * Anonymous and non-admin callers can only see enabled products. Administrators can also see
    * disabled products.
    *
-   * @param name the product name
-   * @param authentication the current authentication, or {@code null} for anonymous requests
+   * @param name        the product name
+   * @param userDetails the current userDetails, or {@code null} for anonymous requests
    * @return the product DTO visible to the current caller
    */
-  ProductDto findByNameForCurrentUser(String name, Authentication authentication);
+  ProductDto findByNameForCurrentUser(String name, @Nullable CustomUserDetails userDetails);
 
   /**
    * Finds a product by its name or throws if it does not exist.

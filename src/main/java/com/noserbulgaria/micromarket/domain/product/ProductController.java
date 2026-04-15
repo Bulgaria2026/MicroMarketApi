@@ -3,6 +3,7 @@ package com.noserbulgaria.micromarket.domain.product;
 import com.noserbulgaria.micromarket.domain.product.dto.ProductDto;
 import com.noserbulgaria.micromarket.domain.product.dto.ProductWithHistoryDto;
 import com.noserbulgaria.micromarket.domain.product.dto.ProductWriteDto;
+import com.noserbulgaria.micromarket.security.user.CustomUserDetails;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -14,7 +15,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -61,11 +62,10 @@ public class ProductController {
       @Parameter(description = "Product id")
       @PathVariable
       UUID id,
-      Authentication authentication
+      @AuthenticationPrincipal CustomUserDetails userDetails
   ) {
-    return productService.getByIdForCurrentUser(id, authentication);
+    return productService.getByIdForCurrentUser(id, userDetails);
   }
-
 
   @Operation(summary = "Search product by name")
   @ApiResponse(responseCode = "200", description = "Product found")
@@ -75,12 +75,12 @@ public class ProductController {
   public ProductDto searchByName(
       @Parameter(description = "Product name")
       @RequestParam String name,
-      Authentication authentication
+      @AuthenticationPrincipal CustomUserDetails userDetails
   ) {
-    return productService.findByNameForCurrentUser(name, authentication);
+    return productService.findByNameForCurrentUser(name, userDetails);
   }
 
-  // Admin only endpoints
+  //region
 
   @Operation(summary = "Create a new product")
   @ApiResponse(responseCode = "201", description = "Product created successfully")
