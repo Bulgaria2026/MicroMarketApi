@@ -8,18 +8,19 @@ import com.noserbulgaria.micromarket.exception.BadRequestException;
 import com.noserbulgaria.micromarket.exception.EntityNotFoundException;
 import com.noserbulgaria.micromarket.exception.UnauthorizedException;
 import com.noserbulgaria.micromarket.generic.ExtendedServiceImpl;
+import com.noserbulgaria.micromarket.security.user.CustomUserDetails;
 import com.noserbulgaria.micromarket.security.user.Role;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -27,6 +28,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @Transactional
+@NullMarked
 public class ProductServiceImpl extends ExtendedServiceImpl<Product, ProductDto, ProductRepository, ProductMapper>
     implements ProductService {
 
@@ -55,17 +57,17 @@ public class ProductServiceImpl extends ExtendedServiceImpl<Product, ProductDto,
 
   @Override
   @Transactional(readOnly = true)
-  public ProductWithHistoryDto getByIdForCurrentUser(UUID id, Authentication authentication) {
+  public ProductWithHistoryDto getByIdForCurrentUser(UUID id, @Nullable CustomUserDetails userDetails) {
     Product product = findProductByIdOrThrow(id);
-    validateDisabledProductAccess(product, authentication);
+    validateDisabledProductAccess(product, userDetails);
     return toProductWithHistoryDto(product);
   }
 
   @Override
   @Transactional(readOnly = true)
-  public ProductDto findByNameForCurrentUser(String name, Authentication authentication) {
+  public ProductDto findByNameForCurrentUser(String name, @Nullable CustomUserDetails userDetails) {
     Product product = findProductByNameOrThrow(name);
-    validateDisabledProductAccess(product, authentication);
+    validateDisabledProductAccess(product, userDetails);
     return toProductDto(product);
   }
 
@@ -201,15 +203,13 @@ public class ProductServiceImpl extends ExtendedServiceImpl<Product, ProductDto,
         .orElseThrow(() -> new EntityNotFoundException("Product not found with name: " + name));
   }
 
-  private void validateDisabledProductAccess(Product product, Authentication authentication) {
-    if (Boolean.FALSE.equals(product.getEnabled()) && !isAdministrator(authentication)) {
-      throw new UnauthorizedException("Authentication required to access disabled products");
+  private void validateDisabledProductAccess(Product product, @Nullable CustomUserDetails userDetails) {
+    if (!product.getEnabled()) {
+      {
+        if (userDetails == null || userDetails.getRole() != (Role.ADMINISTRATOR)) {
+          throw new UnauthorizedException("Authentication required to access disabled products");
+        }
+      }
     }
-  }
-
-  private boolean isAdministrator(Authentication authentication) {
-    return authentication != null && authentication.getAuthorities().stream()
-        .anyMatch(authority ->
-            Objects.equals(authority.getAuthority(), "ROLE_" + Role.ADMINISTRATOR.name()));
   }
 }

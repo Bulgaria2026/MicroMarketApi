@@ -8,8 +8,8 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Adapts the {@link User} entity to Spring Security's {@link UserDetails} contract,
- * mapping the user's {@link Role} to a granted authority.
+ * Adapts the {@link User} entity to Spring Security's {@link UserDetails} contract, mapping the user's {@link Role} to
+ * a granted authority.
  */
 public record CustomUserDetails(User user) implements UserDetails {
 
@@ -26,5 +26,9 @@ public record CustomUserDetails(User user) implements UserDetails {
   @Override
   public String getUsername() {
     return user.getEmail();
+  }
+
+  public Role getRole() {
+    return user.getRole();
   }
 }
