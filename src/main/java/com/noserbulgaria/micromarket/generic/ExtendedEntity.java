@@ -12,6 +12,7 @@ import java.util.UUID;
 @Data
 @MappedSuperclass
 @EntityListeners(AuditingEntityListener.class)
+@SuppressWarnings("NullAway.Init")
 public abstract class ExtendedEntity {
 
   @Id

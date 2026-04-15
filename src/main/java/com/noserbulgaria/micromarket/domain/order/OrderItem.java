@@ -16,6 +16,7 @@ import lombok.ToString;
 @Data
 @Entity
 @EqualsAndHashCode(callSuper = false)
+@SuppressWarnings("NullAway.Init")
 public class OrderItem extends ExtendedEntity {
 
   @EqualsAndHashCode.Exclude

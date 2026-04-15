@@ -9,6 +9,7 @@ import lombok.EqualsAndHashCode;
 @Entity
 @Table(name = "users")
 @EqualsAndHashCode(callSuper = true)
+@SuppressWarnings("NullAway.Init")
 public class User extends ExtendedEntity {
 
   @Column(nullable = false, unique = true)
