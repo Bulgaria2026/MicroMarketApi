@@ -4,8 +4,8 @@ import com.noserbulgaria.micromarket.security.auth.dto.AuthResponseDto;
 import com.noserbulgaria.micromarket.security.auth.dto.LoginRequestDto;
 import com.noserbulgaria.micromarket.security.auth.dto.RefreshRequestDto;
 import com.noserbulgaria.micromarket.security.auth.dto.RegisterRequestDto;
-import com.noserbulgaria.micromarket.exception.DuplicateEmailException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Service for user authentication and token management.
@@ -17,7 +17,7 @@ public interface AuthService {
    *
    * @param request the registration credentials
    * @return access and refresh tokens for the newly created account
-   * @throws DuplicateEmailException if the email is already registered
+   * @throws ResponseStatusException if the email is already registered
    */
   AuthResponseDto register(RegisterRequestDto request);
 

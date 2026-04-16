@@ -4,7 +4,6 @@ import com.noserbulgaria.micromarket.security.auth.dto.AuthResponseDto;
 import com.noserbulgaria.micromarket.security.auth.dto.LoginRequestDto;
 import com.noserbulgaria.micromarket.security.auth.dto.RefreshRequestDto;
 import com.noserbulgaria.micromarket.security.auth.dto.RegisterRequestDto;
-import com.noserbulgaria.micromarket.exception.DuplicateEmailException;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
 import com.noserbulgaria.micromarket.security.user.UserRepository;
@@ -14,9 +13,12 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Objects;
 import java.util.UUID;
+
+import static org.springframework.http.HttpStatus.CONFLICT;
 
 @Service
 @RequiredArgsConstructor
@@ -31,7 +33,7 @@ public class AuthServiceImpl implements AuthService {
   @Override
   public AuthResponseDto register(RegisterRequestDto request) {
     if (userRepository.existsByEmail(request.email())) {
-      throw new DuplicateEmailException(request.email());
+      throw new ResponseStatusException(CONFLICT, "Email already registered: " + request.email());
     }
 
     User user = new User();
