@@ -32,7 +32,7 @@ public class OrderItem extends ExtendedEntity {
   private Product product;
 
   @Column(nullable = false)
-  private Integer quantity;
+  private int quantity;
 
   @Column(nullable = false)
   private BigDecimal priceAtPurchase;

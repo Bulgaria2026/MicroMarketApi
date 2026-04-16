@@ -1,9 +1,8 @@
 package com.noserbulgaria.micromarket.domain.product;
 
-import com.noserbulgaria.micromarket.domain.product.dto.ProductHistoryDto;
+import com.noserbulgaria.micromarket.domain.product.dto.ProductHistoryResponseDto;
+import com.noserbulgaria.micromarket.domain.product.dto.ProductMapper;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.history.Revision;
-import org.springframework.data.history.Revisions;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,31 +15,16 @@ import java.util.UUID;
 public class ProductHistoryService {
 
   private final ProductRepository productRepository;
+  private final ProductMapper productMapper;
 
-  public List<ProductHistoryDto> findHistoryByProductId(UUID productId) {
-    Revisions<Integer, Product> revisions = productRepository.findRevisions(productId);
-
-    return revisions.stream()
-        .map(this::toHistoryDto)
+  public List<ProductHistoryResponseDto> findHistoryByProductId(UUID productId) {
+    return productRepository.findRevisions(productId).stream()
+        .map(revision -> productMapper.toHistoryDto(
+            revision.getEntity(),
+            revision.getRequiredRevisionNumber().longValue(),
+            revision.getMetadata().getRequiredRevisionInstant(),
+            revision.getMetadata().getRevisionType().name()
+        ))
         .toList();
-  }
-
-  private ProductHistoryDto toHistoryDto(Revision<Integer, Product> revision) {
-    Product product = revision.getEntity();
-
-    return new ProductHistoryDto(
-        product.getId(),
-        product.getCreatedAt(),
-        product.getUpdatedAt(),
-        product.getName(),
-        product.getDescription(),
-        product.getPrice(),
-        product.getDiscount(),
-        product.getEnabled(),
-        product.getAmount(),
-        revision.getRequiredRevisionNumber().longValue(),
-        revision.getMetadata().getRequiredRevisionInstant(),
-        revision.getMetadata().getRevisionType().name()
-    );
   }
 }

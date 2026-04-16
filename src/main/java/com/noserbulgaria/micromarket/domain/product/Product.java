@@ -5,8 +5,6 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
@@ -17,9 +15,7 @@ import org.jspecify.annotations.Nullable;
 import java.math.BigDecimal;
 
 @Data
-@Builder
 @NoArgsConstructor
-@AllArgsConstructor
 @Entity
 @Audited
 @EqualsAndHashCode(callSuper = true)
@@ -38,11 +34,11 @@ public class Product extends ExtendedEntity {
   @Min(0)
   @Max(100)
   @Column(nullable = false)
-  private Integer discount;
+  private int discount;
 
   @Column(nullable = false)
-  private Boolean enabled;
+  private boolean enabled;
 
   @Column(nullable = false)
-  private Long amount;
+  private long amount;
 }
