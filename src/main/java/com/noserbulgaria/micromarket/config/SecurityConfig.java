@@ -48,14 +48,10 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-  private static final String[] AUTHENTICATED_GET_ENDPOINTS = {
-      "/product/disabled"
-  };
-
   private static final String[] PUBLIC_GET_ENDPOINTS = {
       "/product",
-      "/product/search/by-name",
-      "/product/{id}"
+      "/product/{id}",
+      "/product/{id}/history"
   };
 
   private final RSAPublicKey rsaPublicKey;
@@ -72,7 +68,6 @@ public class SecurityConfig {
         .csrf(AbstractHttpConfigurer::disable)
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth
-            .requestMatchers(HttpMethod.GET, AUTHENTICATED_GET_ENDPOINTS).authenticated()
             .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
             .requestMatchers(
                 "/auth/**",

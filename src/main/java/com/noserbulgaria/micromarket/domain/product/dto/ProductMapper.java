@@ -4,7 +4,6 @@ import com.noserbulgaria.micromarket.domain.product.Product;
 import org.mapstruct.*;
 
 import java.time.Instant;
-import java.util.List;
 
 @Mapper(
     componentModel = MappingConstants.ComponentModel.SPRING,
@@ -13,8 +12,6 @@ import java.util.List;
 public interface ProductMapper {
 
   ProductResponseDto toDto(Product product);
-
-  ProductWithHistoryResponseDto toDtoWithHistory(Product product, List<ProductHistoryResponseDto> history);
 
   ProductHistoryResponseDto toHistoryDto(Product product, long revisionNumber, Instant revisionTimestamp, String revisionType);
 

@@ -15,7 +15,7 @@ import java.math.BigDecimal;
 
 @Data
 @Entity
-@EqualsAndHashCode(callSuper = false)
+@EqualsAndHashCode(callSuper = true)
 @SuppressWarnings("NullAway.Init")
 public class OrderItem extends ExtendedEntity {
 

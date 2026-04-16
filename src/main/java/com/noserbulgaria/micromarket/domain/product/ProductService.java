@@ -1,23 +1,25 @@
 package com.noserbulgaria.micromarket.domain.product;
 
-import com.noserbulgaria.micromarket.domain.product.dto.*;
+import com.noserbulgaria.micromarket.domain.product.dto.ProductHistoryResponseDto;
+import com.noserbulgaria.micromarket.domain.product.dto.ProductMapper;
+import com.noserbulgaria.micromarket.domain.product.dto.ProductRequestDto;
+import com.noserbulgaria.micromarket.domain.product.dto.ProductResponseDto;
 import com.noserbulgaria.micromarket.exception.ForbiddenApiException;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
 import com.noserbulgaria.micromarket.exception.UnauthorizedApiException;
 import com.noserbulgaria.micromarket.security.user.CustomUserDetails;
 import com.noserbulgaria.micromarket.security.user.Role;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
 
-@Slf4j
 @Service
 @Transactional
 @RequiredArgsConstructor
@@ -31,22 +33,15 @@ public class ProductService {
   }
 
   @Transactional(readOnly = true)
-  public ProductWithHistoryResponseDto getByIdForCurrentUser(UUID id, @Nullable CustomUserDetails userDetails) {
+  public ProductResponseDto getByIdForCurrentUser(UUID id, @Nullable CustomUserDetails userDetails) {
     Product product = findProductByIdOrThrow(id);
-    validateDisabledProductAccess(product, userDetails);
-    return productMapper.toDtoWithHistory(product, findRevisions(product.getId()));
-  }
-
-  @Transactional(readOnly = true)
-  public ProductResponseDto findByNameForCurrentUser(String name, @Nullable CustomUserDetails userDetails) {
-    Product product = findProductByNameOrThrow(name);
     validateDisabledProductAccess(product, userDetails);
     return productMapper.toDto(product);
   }
 
   @Transactional(readOnly = true)
-  public Page<ProductResponseDto> findAll(Pageable pageable) {
-    return productRepository.findAllByEnabledTrue(pageable).map(productMapper::toDto);
+  public Page<ProductResponseDto> findAll(Specification<Product> spec, Pageable pageable) {
+    return productRepository.findAll(spec, pageable).map(productMapper::toDto);
   }
 
   public ProductResponseDto updateOrThrow(UUID id, ProductRequestDto dto) {
@@ -56,20 +51,15 @@ public class ProductService {
   }
 
   @Transactional(readOnly = true)
-  public List<ProductResponseDto> findAllDisabled() {
-    return productRepository.findAllByEnabledFalse().stream()
-        .map(productMapper::toDto)
-        .toList();
+  public List<ProductHistoryResponseDto> getHistory(UUID id, @Nullable CustomUserDetails userDetails) {
+    Product product = findProductByIdOrThrow(id);
+    validateDisabledProductAccess(product, userDetails);
+    return findRevisions(id);
   }
 
   private Product findProductByIdOrThrow(UUID id) {
     return productRepository.findById(id)
         .orElseThrow(() -> new NotFoundApiException("Product with id '%s' not found".formatted(id)));
-  }
-
-  private Product findProductByNameOrThrow(String name) {
-    return productRepository.findByNameIgnoreCase(name)
-        .orElseThrow(() -> new NotFoundApiException("Product with name '%s' not found".formatted(name)));
   }
 
   private List<ProductHistoryResponseDto> findRevisions(UUID productId) {
