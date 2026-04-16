@@ -1,5 +1,6 @@
 package com.noserbulgaria.micromarket.domain.product.dto;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -15,9 +16,9 @@ public record ProductHistoryDto(
 
     String description,
 
-    Double price,
+    BigDecimal price,
 
-    Double discount,
+    Integer discount,
 
     Boolean enabled,
 

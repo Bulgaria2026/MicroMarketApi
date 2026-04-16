@@ -91,7 +91,7 @@ public class ProductServiceImpl extends ExtendedServiceImpl<Product, ProductDto,
   public Page<ProductDto> findAll(Pageable pageable) {
     List<ProductDto> enabledProducts = productRepository.findAll()
         .stream()
-        .filter(product -> Boolean.TRUE.equals(product.getEnabled()))
+        .filter(Product::getEnabled)
         .map(this::toProductDto)
         .toList();
 

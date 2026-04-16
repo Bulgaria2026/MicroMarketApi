@@ -27,13 +27,13 @@ databaseChangeLog:
 
               - column:
                   name: price
-                  type: double
+                  type: numeric
                   constraints:
                     nullable: false
 
               - column:
+                  type: integer
                   name: discount
-                  type: double
                   constraints:
                     nullable: false
 
