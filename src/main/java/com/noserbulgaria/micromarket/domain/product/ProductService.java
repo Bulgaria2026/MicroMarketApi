@@ -4,9 +4,10 @@ import com.noserbulgaria.micromarket.domain.product.dto.ProductResponseDto;
 import com.noserbulgaria.micromarket.domain.product.dto.ProductMapper;
 import com.noserbulgaria.micromarket.domain.product.dto.ProductRequestDto;
 import com.noserbulgaria.micromarket.domain.product.dto.ProductWithHistoryResponseDto;
-import com.noserbulgaria.micromarket.exception.BadRequestException;
-import com.noserbulgaria.micromarket.exception.EntityNotFoundException;
-import com.noserbulgaria.micromarket.exception.UnauthorizedException;
+import com.noserbulgaria.micromarket.exception.BadRequestApiException;
+import com.noserbulgaria.micromarket.exception.ExceptionContexts;
+import com.noserbulgaria.micromarket.exception.NotFoundApiException;
+import com.noserbulgaria.micromarket.exception.UnauthorizedApiException;
 import com.noserbulgaria.micromarket.security.user.CustomUserDetails;
 import com.noserbulgaria.micromarket.security.user.Role;
 import lombok.RequiredArgsConstructor;
@@ -79,7 +80,7 @@ public class ProductService {
   public void deleteOrThrow(UUID id) {
     Product product = findProductByIdOrThrow(id);
     if (product.isEnabled()) {
-      throw new BadRequestException("Product must be disabled before it can be deleted");
+      throw new BadRequestApiException(ExceptionContexts.of(product.getName()));
     }
 
     productRepository.deleteAuditHistoryByProductId(id);
@@ -98,7 +99,7 @@ public class ProductService {
 
   private Product findProductByIdOrThrow(UUID id) {
     return productRepository.findById(id)
-        .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
+        .orElseThrow(() -> new NotFoundApiException(ExceptionContexts.fromUuid(id)));
   }
 
   private Product findProductByNameOrThrow(String name) {
@@ -106,12 +107,12 @@ public class ProductService {
         .stream()
         .filter(product -> product.getName().equalsIgnoreCase(name))
         .findFirst()
-        .orElseThrow(() -> new EntityNotFoundException("Product not found with name: " + name));
+        .orElseThrow(() -> new NotFoundApiException(ExceptionContexts.of(name)));
   }
 
   private void validateDisabledProductAccess(Product product, @Nullable CustomUserDetails userDetails) {
     if (!product.isEnabled() && (userDetails == null || userDetails.getRole() != Role.ADMINISTRATOR)) {
-      throw new UnauthorizedException("Authentication required to access disabled products");
+      throw new UnauthorizedApiException(ExceptionContexts.of(product.getName()));
     }
   }
 }

@@ -98,7 +98,12 @@ class ProductIntegrationTests {
     Product product = productRepository.saveAndFlush(product("Hidden Water", false, 5L));
 
     mockMvc.perform(get("/product/{id}", product.getId()))
-        .andExpect(status().isUnauthorized());
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.type").value("about:blank"))
+        .andExpect(jsonPath("$.title").value("Unauthorized"))
+        .andExpect(jsonPath("$.status").value(401))
+        .andExpect(jsonPath("$.detail").value("Unauthorized: 'Hidden Water'."))
+        .andExpect(jsonPath("$.instance").value("/product/" + product.getId()));
   }
 
   @Test
@@ -146,14 +151,25 @@ class ProductIntegrationTests {
 
   @Test
   void getById_nonExistentProduct_returns404() throws Exception {
-    mockMvc.perform(get("/product/{id}", UUID.randomUUID()))
-        .andExpect(status().isNotFound());
+    UUID productId = UUID.randomUUID();
+
+    mockMvc.perform(get("/product/{id}", productId))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.type").value("about:blank"))
+        .andExpect(jsonPath("$.title").value("Not Found"))
+        .andExpect(jsonPath("$.status").value(404))
+        .andExpect(jsonPath("$.detail").value("Resource not found: '%s'.".formatted(productId)))
+        .andExpect(jsonPath("$.instance").value("/product/" + productId));
   }
 
   @Test
   void getById_invalidUuid_returns400() throws Exception {
     mockMvc.perform(get("/product/{id}", "not-a-uuid"))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.type").value("about:blank"))
+        .andExpect(jsonPath("$.title").value("Request Binding Failed"))
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.instance").value("/product/not-a-uuid"));
   }
 
   @Test
@@ -225,7 +241,12 @@ class ProductIntegrationTests {
 
     mockMvc.perform(get("/product/disabled")
             .header(HttpHeaders.AUTHORIZATION, bearer(userToken)))
-        .andExpect(status().isForbidden());
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.type").value("about:blank"))
+        .andExpect(jsonPath("$.title").value("Access Denied"))
+        .andExpect(jsonPath("$.status").value(403))
+        .andExpect(jsonPath("$.detail").value("Access to '/product/disabled' is forbidden."))
+        .andExpect(jsonPath("$.instance").value("/product/disabled"));
   }
 
   @Test
@@ -237,7 +258,11 @@ class ProductIntegrationTests {
   @Test
   void searchByName_missingParam_returns400() throws Exception {
     mockMvc.perform(get("/product/search/by-name"))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.type").value("about:blank"))
+        .andExpect(jsonPath("$.title").value("Request Binding Failed"))
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.instance").value("/product/search/by-name"));
   }
   //endregion
 
@@ -284,7 +309,13 @@ class ProductIntegrationTests {
             .content("""
                 {"name":"","description":"","price":-1,"discount":101,"enabled":true,"amount":-5}
                 """))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.type").value("about:blank"))
+        .andExpect(jsonPath("$.title").value("Request Validation Failed"))
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.detail").value("Request body validation failed."))
+        .andExpect(jsonPath("$.instance").value("/product"))
+        .andExpect(jsonPath("$.errors").isArray());
   }
 
   @Test
@@ -412,7 +443,12 @@ class ProductIntegrationTests {
 
     mockMvc.perform(delete("/product/{id}", product.getId())
             .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
-        .andExpect(status().isBadRequest());
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.type").value("about:blank"))
+        .andExpect(jsonPath("$.title").value("Bad Request"))
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.detail").value("Bad request: 'Still Active'."))
+        .andExpect(jsonPath("$.instance").value("/product/" + product.getId()));
   }
   //endregion
 
