@@ -2,9 +2,7 @@ package com.noserbulgaria.micromarket.security.auth;
 
 import com.noserbulgaria.micromarket.exception.ConflictApiException;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
-import com.noserbulgaria.micromarket.security.auth.dto.AuthResponseDto;
 import com.noserbulgaria.micromarket.security.auth.dto.LoginRequestDto;
-import com.noserbulgaria.micromarket.security.auth.dto.RefreshRequestDto;
 import com.noserbulgaria.micromarket.security.auth.dto.RegisterRequestDto;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
@@ -29,7 +27,7 @@ public class AuthService {
   private final TokenService tokenService;
   private final PasswordEncoder passwordEncoder;
 
-  public AuthResponseDto register(RegisterRequestDto request) {
+  public AuthTokens register(RegisterRequestDto request) {
     if (userRepository.existsByEmail(request.email())) {
       throw new ConflictApiException("User with email '%s' already exists".formatted(request.email()));
     }
@@ -40,30 +38,30 @@ public class AuthService {
     user.setRole(Role.USER);
     user = userRepository.save(user);
 
-    return generateAuthResponse(user);
+    return generateAuthTokens(user);
   }
 
-  public AuthResponseDto login(LoginRequestDto request) {
+  public AuthTokens login(LoginRequestDto request) {
     authenticationManager.authenticate(
         new UsernamePasswordAuthenticationToken(request.email(), request.password()));
 
     User user = userRepository.findByEmail(request.email())
         .orElseThrow(() -> new NotFoundApiException("User with email '%s' not found".formatted(request.email())));
-    return generateAuthResponse(user);
+    return generateAuthTokens(user);
   }
 
   @Transactional(readOnly = true)
-  public AuthResponseDto refresh(RefreshRequestDto request) {
-    UUID userId = tokenService.parseRefreshToken(request.refreshToken());
+  public AuthTokens refresh(String refreshToken) {
+    UUID userId = tokenService.parseRefreshToken(refreshToken);
     User user = userRepository.findById(userId)
         .orElseThrow(() -> new NotFoundApiException("User with id '%s' not found".formatted(userId)));
-    return generateAuthResponse(user);
+    return generateAuthTokens(user);
   }
 
-  private AuthResponseDto generateAuthResponse(User user) {
+  private AuthTokens generateAuthTokens(User user) {
     String accessToken = tokenService.generateAccessToken(user);
     String refreshToken = tokenService.generateRefreshToken(user);
     long expiresIn = tokenService.getAccessTokenExpirationSeconds();
-    return new AuthResponseDto(accessToken, refreshToken, expiresIn);
+    return new AuthTokens(accessToken, refreshToken, expiresIn);
   }
 }
