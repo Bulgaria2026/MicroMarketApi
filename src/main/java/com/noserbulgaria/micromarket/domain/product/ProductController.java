@@ -6,7 +6,6 @@ import com.noserbulgaria.micromarket.domain.product.dto.ProductWriteDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,17 +37,16 @@ public class ProductController {
 
   private final ProductService productService;
 
-  //region Public Endpoints
   @Operation(summary = "Get all products with pagination")
-  @SecurityRequirements
-  @GetMapping("/public")
+  @GetMapping
   public Page<ProductDto> getAll(
       @Parameter(description = "Page number (0-indexed)")
       @RequestParam(defaultValue = "0") int page,
       @Parameter(description = "Page size")
       @RequestParam(defaultValue = "10") int size,
       @Parameter(description = "Sort field")
-      @RequestParam(defaultValue = "createdAt") String sort) {
+      @RequestParam(defaultValue = "createdAt") String sort
+  ) {
     return productService.findAll(
         PageRequest.of(page, size, Sort.by(sort).descending())
     );
@@ -55,35 +54,34 @@ public class ProductController {
 
   @Operation(summary = "Get product by ID")
   @ApiResponse(responseCode = "200", description = "Product found")
+  @ApiResponse(responseCode = "401", description = "Authentication required to access a disabled product")
   @ApiResponse(responseCode = "404", description = "Product not found")
-  @SecurityRequirements
-  @GetMapping("/public/{id}")
+  @GetMapping("/{id}")
   public ProductWithHistoryDto getById(
-      @Parameter(description = "Product ID")
-      @PathVariable UUID id) {
-    return productService.getByIdOrThrow(id);
+      @Parameter(description = "Product id")
+      @PathVariable
+      UUID id,
+      Authentication authentication
+  ) {
+    return productService.getByIdForCurrentUser(id, authentication);
   }
 
-  @Operation(summary = "Get all enabled products")
-  @SecurityRequirements
-  @GetMapping("/public/enabled")
-  public List<ProductDto> getAllEnabled() {
-    return productService.findAllEnabled();
-  }
 
   @Operation(summary = "Search product by name")
   @ApiResponse(responseCode = "200", description = "Product found")
+  @ApiResponse(responseCode = "401", description = "Authentication required to access a disabled product")
   @ApiResponse(responseCode = "404", description = "Product not found")
-  @SecurityRequirements
-  @GetMapping("/public/search/by-name")
+  @GetMapping("/search/by-name")
   public ProductDto searchByName(
       @Parameter(description = "Product name")
-      @RequestParam String name) {
-    return productService.findByNameOrThrow(name);
+      @RequestParam String name,
+      Authentication authentication
+  ) {
+    return productService.findByNameForCurrentUser(name, authentication);
   }
-  //endregion
 
-  //region Admin-only Endpoints
+  // Admin only endpoints
+
   @Operation(summary = "Create a new product")
   @ApiResponse(responseCode = "201", description = "Product created successfully")
   @PreAuthorize("hasRole('ADMINISTRATOR')")
@@ -91,6 +89,13 @@ public class ProductController {
   @ResponseStatus(HttpStatus.CREATED)
   public ProductDto create(@Valid @RequestBody ProductWriteDto productDto) {
     return productService.create(productDto);
+  }
+
+  @Operation(summary = "Get all disabled products")
+  @PreAuthorize("hasRole('ADMINISTRATOR')")
+  @GetMapping("/disabled")
+  public List<ProductDto> getAllDisabled() {
+    return productService.findAllDisabled();
   }
 
   @Operation(summary = "Update a product")
@@ -101,7 +106,8 @@ public class ProductController {
   public ProductDto update(
       @Parameter(description = "Product ID")
       @PathVariable UUID id,
-      @Valid @RequestBody ProductWriteDto productDto) {
+      @Valid @RequestBody ProductWriteDto productDto
+  ) {
     return productService.updateOrThrow(id, productDto);
   }
 
@@ -114,5 +120,4 @@ public class ProductController {
   public void delete(@PathVariable UUID id) {
     productService.deleteOrThrow(id);
   }
-  //endregion
 }
