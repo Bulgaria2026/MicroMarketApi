@@ -28,6 +28,5 @@ public abstract class ExtendedEntity {
   private Instant createdAt;
 
   @LastModifiedDate
-  @Column(nullable = true)
   private Instant updatedAt;
 }
