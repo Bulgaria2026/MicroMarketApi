@@ -1,11 +1,7 @@
 package com.noserbulgaria.micromarket.domain.product;
 
-import com.noserbulgaria.micromarket.domain.product.dto.ProductResponseDto;
-import com.noserbulgaria.micromarket.domain.product.dto.ProductMapper;
-import com.noserbulgaria.micromarket.domain.product.dto.ProductRequestDto;
-import com.noserbulgaria.micromarket.domain.product.dto.ProductWithHistoryResponseDto;
+import com.noserbulgaria.micromarket.domain.product.dto.*;
 import com.noserbulgaria.micromarket.exception.BadRequestApiException;
-import com.noserbulgaria.micromarket.exception.ExceptionContexts;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
 import com.noserbulgaria.micromarket.exception.UnauthorizedApiException;
 import com.noserbulgaria.micromarket.security.user.CustomUserDetails;
@@ -31,7 +27,6 @@ public class ProductService {
 
   private final ProductRepository productRepository;
   private final ProductMapper productMapper;
-  private final ProductHistoryService productHistoryService;
 
   public ProductResponseDto create(ProductRequestDto dto) {
     return productMapper.toDto(productRepository.save(productMapper.toEntity(dto)));
@@ -41,10 +36,7 @@ public class ProductService {
   public ProductWithHistoryResponseDto getByIdForCurrentUser(UUID id, @Nullable CustomUserDetails userDetails) {
     Product product = findProductByIdOrThrow(id);
     validateDisabledProductAccess(product, userDetails);
-    return productMapper.toDtoWithHistory(
-        product,
-        productHistoryService.findHistoryByProductId(product.getId())
-    );
+    return productMapper.toDtoWithHistory(product, findRevisions(product.getId()));
   }
 
   @Transactional(readOnly = true)
@@ -80,7 +72,7 @@ public class ProductService {
   public void deleteOrThrow(UUID id) {
     Product product = findProductByIdOrThrow(id);
     if (product.isEnabled()) {
-      throw new BadRequestApiException(ExceptionContexts.of(product.getName()));
+      throw new BadRequestApiException("Cannot delete enabled product '%s'".formatted(product.getName()));
     }
 
     productRepository.deleteAuditHistoryByProductId(id);
@@ -99,7 +91,7 @@ public class ProductService {
 
   private Product findProductByIdOrThrow(UUID id) {
     return productRepository.findById(id)
-        .orElseThrow(() -> new NotFoundApiException(ExceptionContexts.fromUuid(id)));
+        .orElseThrow(() -> new NotFoundApiException("Product with id '%s' not found".formatted(id)));
   }
 
   private Product findProductByNameOrThrow(String name) {
@@ -107,12 +99,23 @@ public class ProductService {
         .stream()
         .filter(product -> product.getName().equalsIgnoreCase(name))
         .findFirst()
-        .orElseThrow(() -> new NotFoundApiException(ExceptionContexts.of(name)));
+        .orElseThrow(() -> new NotFoundApiException("Product with name '%s' not found".formatted(name)));
+  }
+
+  private List<ProductHistoryResponseDto> findRevisions(UUID productId) {
+    return productRepository.findRevisions(productId).stream()
+        .map(revision -> productMapper.toHistoryDto(
+            revision.getEntity(),
+            revision.getRequiredRevisionNumber().longValue(),
+            revision.getMetadata().getRequiredRevisionInstant(),
+            revision.getMetadata().getRevisionType().name()
+        ))
+        .toList();
   }
 
   private void validateDisabledProductAccess(Product product, @Nullable CustomUserDetails userDetails) {
     if (!product.isEnabled() && (userDetails == null || userDetails.getRole() != Role.ADMINISTRATOR)) {
-      throw new UnauthorizedApiException(ExceptionContexts.of(product.getName()));
+      throw new UnauthorizedApiException("Access to disabled product '%s' requires administrator role".formatted(product.getName()));
     }
   }
 }

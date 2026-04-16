@@ -2,7 +2,6 @@ package com.noserbulgaria.micromarket.domain.order;
 
 import com.noserbulgaria.micromarket.domain.order.dto.OrderMapper;
 import com.noserbulgaria.micromarket.domain.order.dto.OrderResponseDto;
-import com.noserbulgaria.micromarket.exception.ExceptionContexts;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -24,7 +23,7 @@ public class OrderService {
   public OrderResponseDto findByIdOrThrow(UUID id) {
     return orderRepository.findById(id)
         .map(orderMapper::toDto)
-        .orElseThrow(() -> new NotFoundApiException(ExceptionContexts.fromUuid(id)));
+        .orElseThrow(() -> new NotFoundApiException("Order with id '%s' not found".formatted(id)));
   }
 
   public Page<OrderResponseDto> findAll(Specification<Order> spec, Pageable pageable) {

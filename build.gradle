@@ -51,6 +51,7 @@ dependencies {
     compileOnly "org.projectlombok:lombok"
     annotationProcessor "org.projectlombok:lombok"
     annotationProcessor "org.projectlombok:lombok-mapstruct-binding:${lombokMapstructBindingVersion}"
+    annotationProcessor "org.hibernate.orm:hibernate-processor"
 
     // Testing
     testImplementation "org.springframework.boot:spring-boot-starter-data-jpa-test"

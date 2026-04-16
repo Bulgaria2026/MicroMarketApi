@@ -132,7 +132,7 @@ class AuthControllerTest {
         .andExpect(jsonPath("$.type").value("about:blank"))
         .andExpect(jsonPath("$.title").value("Conflict"))
         .andExpect(jsonPath("$.status").value(409))
-        .andExpect(jsonPath("$.detail").value("Conflict: 'user@micromarket.dev'."))
+        .andExpect(jsonPath("$.detail").value("User with email 'user@micromarket.dev' already exists"))
         .andExpect(jsonPath("$.instance").value("/auth/register"));
   }
 
@@ -202,7 +202,7 @@ class AuthControllerTest {
         .andExpect(jsonPath("$.type").value("about:blank"))
         .andExpect(jsonPath("$.title").value("Unauthorized"))
         .andExpect(jsonPath("$.status").value(401))
-        .andExpect(jsonPath("$.detail").value("Unauthorized: 'refresh-token'."))
+        .andExpect(jsonPath("$.detail").value("Invalid or expired refresh token"))
         .andExpect(jsonPath("$.instance").value("/auth/refresh"));
   }
 

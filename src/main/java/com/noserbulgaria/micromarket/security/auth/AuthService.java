@@ -1,7 +1,6 @@
 package com.noserbulgaria.micromarket.security.auth;
 
 import com.noserbulgaria.micromarket.exception.ConflictApiException;
-import com.noserbulgaria.micromarket.exception.ExceptionContexts;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
 import com.noserbulgaria.micromarket.security.auth.dto.AuthResponseDto;
 import com.noserbulgaria.micromarket.security.auth.dto.LoginRequestDto;
@@ -32,7 +31,7 @@ public class AuthService {
 
   public AuthResponseDto register(RegisterRequestDto request) {
     if (userRepository.existsByEmail(request.email())) {
-      throw new ConflictApiException(ExceptionContexts.fromEmail(request.email()));
+      throw new ConflictApiException("User with email '%s' already exists".formatted(request.email()));
     }
 
     User user = new User();
@@ -49,7 +48,7 @@ public class AuthService {
         new UsernamePasswordAuthenticationToken(request.email(), request.password()));
 
     User user = userRepository.findByEmail(request.email())
-        .orElseThrow(() -> new NotFoundApiException(ExceptionContexts.fromEmail(request.email())));
+        .orElseThrow(() -> new NotFoundApiException("User with email '%s' not found".formatted(request.email())));
     return generateAuthResponse(user);
   }
 
@@ -57,7 +56,7 @@ public class AuthService {
   public AuthResponseDto refresh(RefreshRequestDto request) {
     UUID userId = tokenService.parseRefreshToken(request.refreshToken());
     User user = userRepository.findById(userId)
-        .orElseThrow(() -> new NotFoundApiException(ExceptionContexts.fromUuid(userId)));
+        .orElseThrow(() -> new NotFoundApiException("User with id '%s' not found".formatted(userId)));
     return generateAuthResponse(user);
   }
 
