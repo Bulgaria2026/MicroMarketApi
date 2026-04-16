@@ -47,14 +47,6 @@ public abstract class ExtendedServiceImpl<
   }
 
   @Override
-  public List<D> findAll() {
-    return repository.findAll()
-        .stream()
-        .map(mapper::entityToDto)
-        .collect(Collectors.toList());
-  }
-
-  @Override
   public Page<D> findAll(Pageable pageable) {
     return repository.findAll(pageable)
         .map(mapper::entityToDto);
@@ -85,15 +77,5 @@ public abstract class ExtendedServiceImpl<
       return true;
     }
     return false;
-  }
-
-  @Override
-  public void deleteAll() {
-    repository.deleteAll();
-  }
-
-  @Override
-  public long count() {
-    return repository.count();
   }
 }
