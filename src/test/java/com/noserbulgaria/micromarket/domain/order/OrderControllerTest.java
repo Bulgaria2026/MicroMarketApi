@@ -137,6 +137,14 @@ class OrderControllerTest {
   @Test
   @WithMockUser(roles = "ADMINISTRATOR")
   void getMissingOrderAsAdministrator_returnsNotFound() throws Exception {
-    mockMvc.perform(get("/order/{id}", UUID.randomUUID())).andExpect(status().isNotFound());
+    UUID orderId = UUID.randomUUID();
+
+    mockMvc.perform(get("/order/{id}", orderId))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.type").value("about:blank"))
+        .andExpect(jsonPath("$.title").value("Not Found"))
+        .andExpect(jsonPath("$.status").value(404))
+        .andExpect(jsonPath("$.detail").value("Resource not found: '%s'.".formatted(orderId)))
+        .andExpect(jsonPath("$.instance").value("/order/" + orderId));
   }
 }

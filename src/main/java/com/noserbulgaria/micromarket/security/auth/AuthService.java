@@ -1,5 +1,8 @@
 package com.noserbulgaria.micromarket.security.auth;
 
+import com.noserbulgaria.micromarket.exception.ConflictApiException;
+import com.noserbulgaria.micromarket.exception.ExceptionContexts;
+import com.noserbulgaria.micromarket.exception.NotFoundApiException;
 import com.noserbulgaria.micromarket.security.auth.dto.AuthResponseDto;
 import com.noserbulgaria.micromarket.security.auth.dto.LoginRequestDto;
 import com.noserbulgaria.micromarket.security.auth.dto.RefreshRequestDto;
@@ -13,12 +16,9 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Objects;
 import java.util.UUID;
-
-import static org.springframework.http.HttpStatus.CONFLICT;
 
 @Service
 @RequiredArgsConstructor
@@ -32,7 +32,7 @@ public class AuthService {
 
   public AuthResponseDto register(RegisterRequestDto request) {
     if (userRepository.existsByEmail(request.email())) {
-      throw new ResponseStatusException(CONFLICT, "Email already registered: " + request.email());
+      throw new ConflictApiException(ExceptionContexts.fromEmail(request.email()));
     }
 
     User user = new User();
@@ -48,14 +48,16 @@ public class AuthService {
     authenticationManager.authenticate(
         new UsernamePasswordAuthenticationToken(request.email(), request.password()));
 
-    User user = userRepository.findByEmail(request.email()).orElseThrow();
+    User user = userRepository.findByEmail(request.email())
+        .orElseThrow(() -> new NotFoundApiException(ExceptionContexts.fromEmail(request.email())));
     return generateAuthResponse(user);
   }
 
   @Transactional(readOnly = true)
   public AuthResponseDto refresh(RefreshRequestDto request) {
     UUID userId = tokenService.parseRefreshToken(request.refreshToken());
-    User user = userRepository.findById(userId).orElseThrow();
+    User user = userRepository.findById(userId)
+        .orElseThrow(() -> new NotFoundApiException(ExceptionContexts.fromUuid(userId)));
     return generateAuthResponse(user);
   }
 

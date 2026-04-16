@@ -6,6 +6,9 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
+import com.noserbulgaria.micromarket.exception.AuthenticationUserNotFoundException;
+import com.noserbulgaria.micromarket.exception.ExceptionContexts;
+import com.noserbulgaria.micromarket.exception.UnauthorizedApiException;
 import com.noserbulgaria.micromarket.security.user.CustomUserDetails;
 import com.noserbulgaria.micromarket.security.user.CustomUserDetailsService;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +16,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ProblemDetail;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
@@ -25,19 +31,23 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.jwt.*;
-import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
-import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
-import org.springframework.security.oauth2.server.resource.web.access.BearerTokenAccessDeniedHandler;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.net.URI;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.List;
@@ -82,8 +92,8 @@ public class SecurityConfig {
         .oauth2ResourceServer(oauth2 -> oauth2
             .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
         .exceptionHandling(exceptions -> exceptions
-            .authenticationEntryPoint(new BearerTokenAuthenticationEntryPoint())
-            .accessDeniedHandler(new BearerTokenAccessDeniedHandler()));
+            .authenticationEntryPoint(problemDetailAuthenticationEntryPoint())
+            .accessDeniedHandler(problemDetailAccessDeniedHandler()));
     return http.build();
   }
 
@@ -98,7 +108,7 @@ public class SecurityConfig {
     return jwt -> {
       String email = jwt.getClaimAsString("email");
       if (email == null) {
-        throw new InvalidBearerTokenException("Missing email claim");
+        throw new UnauthorizedApiException(ExceptionContexts.of("email"));
       }
       CustomUserDetails principal = userDetailsService.loadUserByUsername(email);
       return new UsernamePasswordAuthenticationToken(
@@ -147,5 +157,78 @@ public class SecurityConfig {
     DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(userDetailsService);
     authProvider.setPasswordEncoder(passwordEncoder);
     return new ProviderManager(authProvider);
+  }
+
+  private AuthenticationEntryPoint problemDetailAuthenticationEntryPoint() {
+    return (request, response, ex) -> {
+      ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+          HttpStatus.UNAUTHORIZED,
+          authenticationDetail(request.getRequestURI(), ex)
+      );
+      URI type = URI.create("about:blank");
+      URI instance = URI.create(request.getRequestURI());
+      String title = "Unauthorized";
+      String detail = problemDetail.getDetail() == null
+          ? "Authentication is required to access '%s'.".formatted(request.getRequestURI())
+          : problemDetail.getDetail();
+      problemDetail.setTitle(title);
+      problemDetail.setType(type);
+      problemDetail.setInstance(instance);
+      writeProblemDetail(response, type.toString(), title, detail, instance.toString(), HttpStatus.UNAUTHORIZED.value());
+    };
+  }
+
+  private AccessDeniedHandler problemDetailAccessDeniedHandler() {
+    return (request, response, ex) -> {
+      ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+          HttpStatus.FORBIDDEN,
+          "Access to '%s' is forbidden.".formatted(request.getRequestURI())
+      );
+      URI type = URI.create("about:blank");
+      URI instance = URI.create(request.getRequestURI());
+      String title = "Access Denied";
+      String detail = "Access to '%s' is forbidden.".formatted(request.getRequestURI());
+      problemDetail.setType(type);
+      problemDetail.setTitle(title);
+      problemDetail.setInstance(instance);
+      writeProblemDetail(response, type.toString(), title, detail, instance.toString(), HttpStatus.FORBIDDEN.value());
+    };
+  }
+
+  private void writeProblemDetail(
+      jakarta.servlet.http.HttpServletResponse response,
+      String type,
+      String title,
+      String detail,
+      String instance,
+      int status
+  ) throws java.io.IOException {
+    response.setStatus(status);
+    response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
+    response.getWriter().write("""
+        {"type":"%s","title":"%s","status":%d,"detail":"%s","instance":"%s"}
+        """.formatted(
+        escapeJson(type),
+        escapeJson(title),
+        status,
+        escapeJson(detail),
+        escapeJson(instance)
+    ));
+  }
+
+  private String escapeJson(String value) {
+    return value
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"");
+  }
+
+  private String authenticationDetail(String requestUri, Exception ex) {
+    if (ex instanceof UnauthorizedApiException || ex instanceof AuthenticationUserNotFoundException) {
+      return java.util.Objects.requireNonNullElse(
+          ex.getMessage(),
+          "Authentication is required to access '%s'.".formatted(requestUri)
+      );
+    }
+    return "Authentication is required to access '%s'.".formatted(requestUri);
   }
 }

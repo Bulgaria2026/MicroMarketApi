@@ -2,7 +2,7 @@ package com.noserbulgaria.micromarket.exception;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.ProblemDetail;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -11,187 +11,160 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-import java.time.Instant;
-import java.util.Objects;
+import java.net.URI;
+import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * Global exception handler for REST API. Provides consistent error responses across all endpoints. Define exceptions
- * here to avoid internal server error (500) responses.
- */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-  private String messageOrFallback(Exception ex, String fallback) {
-    return Objects.requireNonNullElse(ex.getMessage(), fallback);
+  @ExceptionHandler(NotFoundApiException.class)
+  public ProblemDetail handleNotFound(NotFoundApiException ex, WebRequest request) {
+    ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    problemDetail.setType(URI.create("about:blank"));
+    problemDetail.setTitle("Not Found");
+    problemDetail.setInstance(URI.create(requestPath(request)));
+    return problemDetail;
   }
 
-  @ExceptionHandler({EntityNotFoundException.class, NoResourceFoundException.class})
-  public ResponseEntity<ApiErrorResponse> handleEntityNotFound(
-      Exception ex,
-      WebRequest request
-  ) {
-    log.warn("Entity not found: {}", ex.getMessage());
-
-    ApiErrorResponse error = new ApiErrorResponse(
-        Instant.now(),
-        HttpStatus.NOT_FOUND.value(),
-        "Not Found",
-        messageOrFallback(ex, "Resource not found"),
-        request.getDescription(false).replace("uri=", "")
-    );
-
-    return new ResponseEntity<>(error, HttpStatus.NOT_FOUND);
+  @ExceptionHandler(BadRequestApiException.class)
+  public ProblemDetail handleBadRequest(BadRequestApiException ex, WebRequest request) {
+    ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    problemDetail.setType(URI.create("about:blank"));
+    problemDetail.setTitle("Bad Request");
+    problemDetail.setInstance(URI.create(requestPath(request)));
+    return problemDetail;
   }
 
-  //region BadRequestException
-  // separated for readability and less generic response messages
+  @ExceptionHandler(ConflictApiException.class)
+  public ProblemDetail handleConflict(ConflictApiException ex, WebRequest request) {
+    ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    problemDetail.setType(URI.create("about:blank"));
+    problemDetail.setTitle("Conflict");
+    problemDetail.setInstance(URI.create(requestPath(request)));
+    return problemDetail;
+  }
+
+  @ExceptionHandler(UnauthorizedApiException.class)
+  public ProblemDetail handleUnauthorized(UnauthorizedApiException ex, WebRequest request) {
+    ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    problemDetail.setType(URI.create("about:blank"));
+    problemDetail.setTitle("Unauthorized");
+    problemDetail.setInstance(URI.create(requestPath(request)));
+    return problemDetail;
+  }
+
+  @ExceptionHandler(ForbiddenApiException.class)
+  public ProblemDetail handleForbidden(ForbiddenApiException ex, WebRequest request) {
+    ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+    problemDetail.setType(URI.create("about:blank"));
+    problemDetail.setTitle("Forbidden");
+    problemDetail.setInstance(URI.create(requestPath(request)));
+    return problemDetail;
+  }
+
+  @ExceptionHandler(InternalServerApiException.class)
+  public ProblemDetail handleInternalServer(InternalServerApiException ex, WebRequest request) {
+    ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage());
+    problemDetail.setType(URI.create("about:blank"));
+    problemDetail.setTitle("Internal Server Error");
+    problemDetail.setInstance(URI.create(requestPath(request)));
+    return problemDetail;
+  }
+
+  @ExceptionHandler(AuthenticationUserNotFoundException.class)
+  public ProblemDetail handleAuthenticationUserNotFound(AuthenticationUserNotFoundException ex, WebRequest request) {
+    ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    problemDetail.setType(URI.create("about:blank"));
+    problemDetail.setTitle("Unauthorized");
+    problemDetail.setInstance(URI.create(requestPath(request)));
+    return problemDetail;
+  }
+
   @ExceptionHandler(MethodArgumentNotValidException.class)
-  public ResponseEntity<ApiErrorResponse> handleValidationException(
-      MethodArgumentNotValidException ex,
-      WebRequest request
-  ) {
-    String message = ex.getBindingResult()
+  public ProblemDetail handleValidationException(MethodArgumentNotValidException ex, WebRequest request) {
+    ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+        HttpStatus.BAD_REQUEST,
+        "Request body validation failed."
+    );
+    problemDetail.setType(URI.create("about:blank"));
+    problemDetail.setTitle("Request Validation Failed");
+    problemDetail.setInstance(URI.create(requestPath(request)));
+    List<String> errors = ex.getBindingResult()
         .getFieldErrors()
         .stream()
         .map(error -> error.getField() + ": " + error.getDefaultMessage())
-        .collect(Collectors.joining(", "));
-
-    ApiErrorResponse error = new ApiErrorResponse(
-        Instant.now(),
-        HttpStatus.BAD_REQUEST.value(),
-        "Validation Failed",
-        message,
-        request.getDescription(false).replace("uri=", "")
-    );
-
-    return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
-  }
-
-  @ExceptionHandler(BadRequestException.class)
-  public ResponseEntity<ApiErrorResponse> handleBadRequestException(
-      BadRequestException ex,
-      WebRequest request
-  ) {
-    ApiErrorResponse error = new ApiErrorResponse(
-        Instant.now(),
-        HttpStatus.BAD_REQUEST.value(),
-        "Bad Request",
-        messageOrFallback(ex, "Bad request"),
-        request.getDescription(false).replace("uri=", "")
-    );
-
-    return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+        .collect(Collectors.toList());
+    problemDetail.setProperty("errors", errors);
+    return problemDetail;
   }
 
   @ExceptionHandler({
       MethodArgumentTypeMismatchException.class,
       MissingServletRequestParameterException.class
   })
-  public ResponseEntity<ApiErrorResponse> handleRequestBindingException(
-      Exception ex,
-      WebRequest request
-  ) {
-    ApiErrorResponse error = new ApiErrorResponse(
-        Instant.now(),
-        HttpStatus.BAD_REQUEST.value(),
-        "Bad Request",
-        messageOrFallback(ex, "Bad request"),
-        request.getDescription(false).replace("uri=", "")
-    );
-
-    return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+  public ProblemDetail handleRequestBindingException(Exception ex, WebRequest request) {
+    ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    problemDetail.setType(URI.create("about:blank"));
+    problemDetail.setTitle("Request Binding Failed");
+    problemDetail.setInstance(URI.create(requestPath(request)));
+    return problemDetail;
   }
-  //endregion
+
+  @ExceptionHandler(NoResourceFoundException.class)
+  public ProblemDetail handleNoResourceFound(NoResourceFoundException ex, WebRequest request) {
+    ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+        HttpStatus.NOT_FOUND,
+        "Resource '%s' was not found.".formatted(ex.getResourcePath())
+    );
+    problemDetail.setType(URI.create("about:blank"));
+    problemDetail.setTitle("Resource Not Found");
+    problemDetail.setInstance(URI.create(requestPath(request)));
+    return problemDetail;
+  }
 
   @ExceptionHandler(AccessDeniedException.class)
-  public ResponseEntity<ApiErrorResponse> handleAccessDenied(
-      AccessDeniedException ex,
-      WebRequest request
-  ) {
-    ApiErrorResponse error = new ApiErrorResponse(
-        Instant.now(),
-        HttpStatus.FORBIDDEN.value(),
-        "Forbidden",
-        messageOrFallback(ex, "Access denied"),
-        request.getDescription(false).replace("uri=", "")
+  public ProblemDetail handleAccessDenied(AccessDeniedException ex, WebRequest request) {
+    ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+        HttpStatus.FORBIDDEN,
+        "Access to '%s' is forbidden.".formatted(requestPath(request))
     );
-
-    return new ResponseEntity<>(error, HttpStatus.FORBIDDEN);
+    problemDetail.setType(URI.create("about:blank"));
+    problemDetail.setTitle("Access Denied");
+    problemDetail.setInstance(URI.create(requestPath(request)));
+    return problemDetail;
   }
 
   @ExceptionHandler(BadCredentialsException.class)
-  public ResponseEntity<ApiErrorResponse> handleBadCredentials(
-      BadCredentialsException ex,
-      WebRequest request
-  ) {
-    log.warn("Bad credentials: {}", ex.getMessage());
-
-    ApiErrorResponse error = new ApiErrorResponse(
-        Instant.now(),
-        HttpStatus.UNAUTHORIZED.value(),
-        "Unauthorized",
-        messageOrFallback(ex, "Invalid credentials"),
-        request.getDescription(false).replace("uri=", "")
+  public ProblemDetail handleBadCredentials(BadCredentialsException ex, WebRequest request) {
+    ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+        HttpStatus.UNAUTHORIZED,
+        "Authentication for '%s' failed.".formatted(requestPath(request))
     );
-
-    return new ResponseEntity<>(error, HttpStatus.UNAUTHORIZED);
-  }
-
-  @ExceptionHandler(UnauthorizedException.class)
-  public ResponseEntity<ApiErrorResponse> handleUnauthorized(
-      UnauthorizedException ex,
-      WebRequest request
-  ) {
-    ApiErrorResponse error = new ApiErrorResponse(
-        Instant.now(),
-        HttpStatus.UNAUTHORIZED.value(),
-        "Unauthorized",
-        messageOrFallback(ex, "Unauthorized"),
-        request.getDescription(false).replace("uri=", "")
-    );
-
-    return new ResponseEntity<>(error, HttpStatus.UNAUTHORIZED);
-  }
-
-  @ExceptionHandler(ResponseStatusException.class)
-  public ResponseEntity<ApiErrorResponse> handleResponseStatusException(
-      ResponseStatusException ex,
-      WebRequest request
-  ) {
-    HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
-    String message = ex.getReason() != null ? ex.getReason() : status.getReasonPhrase();
-
-    ApiErrorResponse error = new ApiErrorResponse(
-        Instant.now(),
-        status.value(),
-        status.getReasonPhrase(),
-        message,
-        request.getDescription(false).replace("uri=", "")
-    );
-
-    return new ResponseEntity<>(error, status);
+    problemDetail.setType(URI.create("about:blank"));
+    problemDetail.setTitle("Authentication Failed");
+    problemDetail.setInstance(URI.create(requestPath(request)));
+    return problemDetail;
   }
 
   @ExceptionHandler(Exception.class)
-  public ResponseEntity<ApiErrorResponse> handleGlobalException(
-      Exception ex,
-      WebRequest request
-  ) {
+  public ProblemDetail handleGlobalException(Exception ex, WebRequest request) {
     log.error("Unexpected error", ex);
 
-    ApiErrorResponse error = new ApiErrorResponse(
-        Instant.now(),
-        HttpStatus.INTERNAL_SERVER_ERROR.value(),
-        "Internal Server Error",
-        "An unexpected error occurred",
-        request.getDescription(false).replace("uri=", "")
+    ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        "An unexpected error occurred for '%s'.".formatted(requestPath(request))
     );
+    problemDetail.setType(URI.create("about:blank"));
+    problemDetail.setTitle("Internal Server Error");
+    problemDetail.setInstance(URI.create(requestPath(request)));
+    return problemDetail;
+  }
 
-    return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
+  private String requestPath(WebRequest request) {
+    return request.getDescription(false).replace("uri=", "");
   }
 }

@@ -1,9 +1,10 @@
 package com.noserbulgaria.micromarket.security.auth;
 
+import com.noserbulgaria.micromarket.exception.ExceptionContexts;
+import com.noserbulgaria.micromarket.exception.UnauthorizedApiException;
 import com.noserbulgaria.micromarket.security.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -85,18 +86,18 @@ public class TokenService {
    *
    * @param token the encoded refresh token
    * @return the user ID from the token's subject claim
-   * @throws BadCredentialsException if the token is invalid, expired, or not a refresh token
+   * @throws UnauthorizedApiException if the token is invalid, expired, or not a refresh token
    */
   public UUID parseRefreshToken(String token) {
     Jwt jwt;
     try {
       jwt = jwtDecoder.decode(token);
     } catch (JwtException e) {
-      throw new BadCredentialsException("Invalid refresh token", e);
+      throw new UnauthorizedApiException(ExceptionContexts.of("refresh-token"));
     }
     String type = jwt.getClaimAsString(TOKEN_TYPE_CLAIM);
     if (!REFRESH_TOKEN_TYPE.equals(type)) {
-      throw new BadCredentialsException("Invalid token type: expected refresh token");
+      throw new UnauthorizedApiException(ExceptionContexts.of(type == null ? "missing" : type));
     }
     return UUID.fromString(jwt.getSubject());
   }
