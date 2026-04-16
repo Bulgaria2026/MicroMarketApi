@@ -28,7 +28,6 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @Transactional
-@NullMarked
 public class ProductServiceImpl extends ExtendedServiceImpl<Product, ProductDto, ProductRepository, ProductMapper>
     implements ProductService {
 
@@ -77,7 +76,6 @@ public class ProductServiceImpl extends ExtendedServiceImpl<Product, ProductDto,
         .map(this::toProductDto);
   }
 
-  @Override
   @Transactional(readOnly = true)
   public List<ProductDto> findAll() {
     return productRepository.findAll()

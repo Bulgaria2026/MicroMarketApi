@@ -1,29 +1,15 @@
 package com.noserbulgaria.micromarket.domain.order;
 
-import java.util.Optional;
-import java.util.UUID;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
+import com.noserbulgaria.micromarket.domain.order.dto.OrderMapper;
+import com.noserbulgaria.micromarket.domain.order.dto.OrderResponseDto;
+import com.noserbulgaria.micromarket.generic.ExtendedServiceImpl;
 import org.springframework.stereotype.Service;
 
-import lombok.RequiredArgsConstructor;
-
 @Service
-@RequiredArgsConstructor
-public class OrderServiceImpl implements OrderService {
+public class OrderServiceImpl extends ExtendedServiceImpl<Order, OrderResponseDto, OrderRepository, OrderMapper>
+    implements OrderService {
 
-  private final OrderRepository orderRepository;
-
-  @Override
-  public Page<Order> findAll(Pageable pageable, OrderFilter filter) {
-    Specification<Order> spec = new OrderSpecification(filter).withFilter();
-    return orderRepository.findAll(spec, pageable);
-  }
-
-  @Override
-  public Optional<Order> findById(UUID id) {
-    return orderRepository.findById(id);
+  public OrderServiceImpl(OrderRepository orderRepository, OrderMapper orderMapper) {
+    super(orderRepository, orderMapper);
   }
 }

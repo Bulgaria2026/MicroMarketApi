@@ -35,13 +35,6 @@ public interface ExtendedService<E extends ExtendedEntity, D extends ExtendedDto
   Optional<D> findById(UUID id);
 
   /**
-   * Retrieves all entities.
-   *
-   * @return a list of all entity DTOs
-   */
-  List<D> findAll();
-
-  /**
    * Retrieves a paginated list of all entities.
    *
    * @param pageable the pagination configuration
@@ -74,17 +67,5 @@ public interface ExtendedService<E extends ExtendedEntity, D extends ExtendedDto
    * @return true if the entity was deleted, false if not found
    */
   boolean delete(UUID id);
-
-  /**
-   * Deletes all entities.
-   */
-  void deleteAll();
-
-  /**
-   * Counts the total number of entities.
-   *
-   * @return the count of entities
-   */
-  long count();
 }
 

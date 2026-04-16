@@ -1,6 +1,5 @@
 package com.noserbulgaria.micromarket.domain.order;
 
-import com.noserbulgaria.micromarket.domain.order.dto.OrderMapper;
 import com.noserbulgaria.micromarket.domain.order.dto.OrderResponseDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -27,7 +26,6 @@ import java.util.UUID;
 public class OrderController {
 
   private final OrderService orderService;
-  private final OrderMapper orderMapper;
 
   @PreAuthorize("hasRole('ADMINISTRATOR')")
   @Transactional(readOnly = true)
@@ -37,7 +35,7 @@ public class OrderController {
   @ApiResponse(responseCode = "401", description = "Unauthorized, authentication required")
   @ApiResponse(responseCode = "403", description = "Forbidden, insufficient permissions")
   public Page<OrderResponseDto> findAll(@ParameterObject Pageable pageable, @ParameterObject OrderFilter filter) {
-    return orderService.findAll(pageable, filter).map(orderMapper::entityToDto);
+    return orderService.findAll(new OrderSpecification(filter).withFilter(), pageable);
   }
 
   @PreAuthorize("hasRole('ADMINISTRATOR')")
@@ -49,9 +47,8 @@ public class OrderController {
   @ApiResponse(responseCode = "401", description = "Unauthorized, authentication required")
   @ApiResponse(responseCode = "403", description = "Forbidden, insufficient permissions")
   public OrderResponseDto findById(@PathVariable UUID id) {
-    return orderService.findById(id).map(
-        orderMapper::entityToDto).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found")
-    );
+    return orderService.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
   }
 
 }

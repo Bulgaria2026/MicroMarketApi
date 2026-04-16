@@ -1,14 +1,7 @@
 package com.noserbulgaria.micromarket.domain.order;
 
-import java.util.Optional;
-import java.util.UUID;
+import com.noserbulgaria.micromarket.domain.order.dto.OrderResponseDto;
+import com.noserbulgaria.micromarket.generic.ExtendedService;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-
-public interface OrderService {
-
-  Page<Order> findAll(Pageable pageable, OrderFilter filter);
-
-  Optional<Order> findById(UUID id);
+public interface OrderService extends ExtendedService<Order, OrderResponseDto> {
 }
