@@ -1,6 +1,6 @@
 package com.noserbulgaria.micromarket.security.auth.dto;
 
-public record AuthResponseDTO(
+public record AuthResponseDto(
 
     String accessToken,
 

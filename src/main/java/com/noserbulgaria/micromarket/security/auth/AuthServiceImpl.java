@@ -1,10 +1,10 @@
 package com.noserbulgaria.micromarket.security.auth;
 
-import com.noserbulgaria.micromarket.security.auth.dto.AuthResponseDTO;
-import com.noserbulgaria.micromarket.security.auth.dto.LoginRequestDTO;
-import com.noserbulgaria.micromarket.security.auth.dto.RefreshRequestDTO;
-import com.noserbulgaria.micromarket.security.auth.dto.RegisterRequestDTO;
-import com.noserbulgaria.micromarket.security.auth.exception.DuplicateEmailException;
+import com.noserbulgaria.micromarket.security.auth.dto.AuthResponseDto;
+import com.noserbulgaria.micromarket.security.auth.dto.LoginRequestDto;
+import com.noserbulgaria.micromarket.security.auth.dto.RefreshRequestDto;
+import com.noserbulgaria.micromarket.security.auth.dto.RegisterRequestDto;
+import com.noserbulgaria.micromarket.exception.DuplicateEmailException;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
 import com.noserbulgaria.micromarket.security.user.UserRepository;
@@ -29,7 +29,7 @@ public class AuthServiceImpl implements AuthService {
   private final PasswordEncoder passwordEncoder;
 
   @Override
-  public AuthResponseDTO register(RegisterRequestDTO request) {
+  public AuthResponseDto register(RegisterRequestDto request) {
     if (userRepository.existsByEmail(request.email())) {
       throw new DuplicateEmailException(request.email());
     }
@@ -44,7 +44,7 @@ public class AuthServiceImpl implements AuthService {
   }
 
   @Override
-  public AuthResponseDTO login(LoginRequestDTO request) {
+  public AuthResponseDto login(LoginRequestDto request) {
     authenticationManager.authenticate(
         new UsernamePasswordAuthenticationToken(request.email(), request.password()));
 
@@ -54,16 +54,16 @@ public class AuthServiceImpl implements AuthService {
 
   @Override
   @Transactional(readOnly = true)
-  public AuthResponseDTO refresh(RefreshRequestDTO request) {
+  public AuthResponseDto refresh(RefreshRequestDto request) {
     UUID userId = tokenService.parseRefreshToken(request.refreshToken());
     User user = userRepository.findById(userId).orElseThrow();
     return generateAuthResponse(user);
   }
 
-  private AuthResponseDTO generateAuthResponse(User user) {
+  private AuthResponseDto generateAuthResponse(User user) {
     String accessToken = tokenService.generateAccessToken(user);
     String refreshToken = tokenService.generateRefreshToken(user);
     long expiresIn = tokenService.getAccessTokenExpirationSeconds();
-    return new AuthResponseDTO(accessToken, refreshToken, expiresIn);
+    return new AuthResponseDto(accessToken, refreshToken, expiresIn);
   }
 }

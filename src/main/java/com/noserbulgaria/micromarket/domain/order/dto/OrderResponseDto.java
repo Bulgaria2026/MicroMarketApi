@@ -7,7 +7,7 @@ import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 
-public record OrderResponseDTO(
+public record OrderResponseDto(
 
     UUID id,
 
@@ -15,7 +15,7 @@ public record OrderResponseDTO(
 
     UUID customerId,
 
-    Set<OrderItemRequestDTO> orderItems,
+    Set<OrderItemRequestDto> orderItems,
 
     Instant createdAt,
 

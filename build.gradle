@@ -22,6 +22,9 @@ repositories {
 ext {
     mapstructVersion = "1.6.3"
     lombokMapstructBindingVersion = "0.2.0"
+    openapiWebmvcVersion = "3.0.2"
+    googleErrorProneCoreVersion = "2.49.0"
+    uberNullawayVersion = "0.13.3"
 }
 
 dependencies {
@@ -60,8 +63,9 @@ dependencies {
     testAnnotationProcessor "org.projectlombok:lombok-mapstruct-binding:${lombokMapstructBindingVersion}"
     testAnnotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
 
-    errorprone "com.google.errorprone:error_prone_core:2.49.0"
-    errorprone "com.uber.nullaway:nullaway:0.13.3"
+    // Error Prone Static Analysis
+    errorprone "com.google.errorprone:error_prone_core:${googleErrorProneCoreVersion}"
+    errorprone "com.uber.nullaway:nullaway:${uberNullawayVersion}"
 }
 
 import net.ltgt.gradle.errorprone.CheckSeverity
