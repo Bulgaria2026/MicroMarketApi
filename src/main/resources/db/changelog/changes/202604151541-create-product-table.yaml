@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: 3
+      id: 202604151541-1
       author: BambusTM
       changes:
         - createTable:
@@ -27,7 +27,7 @@ databaseChangeLog:
 
               - column:
                   name: price
-                  type: numeric
+                  type: decimal(10,2)
                   constraints:
                     nullable: false
 

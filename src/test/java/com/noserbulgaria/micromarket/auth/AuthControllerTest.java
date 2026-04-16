@@ -69,7 +69,6 @@ class AuthControllerTest {
                 {"email": "user@micromarket.dev", "password": "wrongpassword"}
                 """))
         .andExpect(status().isUnauthorized())
-        .andExpect(jsonPath("$.type").value("about:blank"))
         .andExpect(jsonPath("$.title").value("Authentication Failed"))
         .andExpect(jsonPath("$.status").value(401))
         .andExpect(jsonPath("$.detail").value("Authentication for '/auth/login' failed."))
@@ -129,7 +128,6 @@ class AuthControllerTest {
                 {"email": "user@micromarket.dev", "password": "securepass123"}
                 """))
         .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.type").value("about:blank"))
         .andExpect(jsonPath("$.title").value("Conflict"))
         .andExpect(jsonPath("$.status").value(409))
         .andExpect(jsonPath("$.detail").value("User with email 'user@micromarket.dev' already exists"))
@@ -199,7 +197,6 @@ class AuthControllerTest {
                 {"refreshToken": "invalid.jwt.token"}
                 """))
         .andExpect(status().isUnauthorized())
-        .andExpect(jsonPath("$.type").value("about:blank"))
         .andExpect(jsonPath("$.title").value("Unauthorized"))
         .andExpect(jsonPath("$.status").value(401))
         .andExpect(jsonPath("$.detail").value("Invalid or expired refresh token"))

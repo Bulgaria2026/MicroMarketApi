@@ -19,11 +19,11 @@ public record ProductWithHistoryResponseDto(
 
     BigDecimal price,
 
-    Integer discount,
+    int discount,
 
-    Boolean enabled,
+    boolean enabled,
 
-    Long amount,
+    long amount,
 
     List<ProductHistoryResponseDto> history
 
