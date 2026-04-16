@@ -7,16 +7,19 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 
 public record ProductRequestDto(
 
     @NotBlank(message = "Name must not be blank")
+    @Size(max = 255, message = "Name must not exceed 255 characters")
     @Schema(example = "Test Product")
     String name,
 
     @NotBlank(message = "Description must not be blank")
+    @Size(max = 1000, message = "Description must not exceed 1000 characters")
     @Schema(example = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. ")
     String description,
 

@@ -76,20 +76,66 @@ class ProductIntegrationTests {
   }
 
   @Test
-  void getById_withoutAuthentication_returnsProductWithHistory() throws Exception {
+  void getAll_filterByName_returnsMatchingProducts() throws Exception {
+    productRepository.saveAndFlush(product("Cola", true, 10L));
+    productRepository.saveAndFlush(product("Cola Zero", true, 5L));
+    productRepository.saveAndFlush(product("Chips", true, 3L));
+
+    mockMvc.perform(get("/product").param("name", "cola"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(2))
+        .andExpect(jsonPath("$.page.totalElements").value(2));
+  }
+
+  @Test
+  void getAll_filterByPriceRange_returnsMatchingProducts() throws Exception {
+    productRepository.saveAndFlush(product("Cheap", true, 10L, BigDecimal.valueOf(1)));
+    productRepository.saveAndFlush(product("Mid", true, 5L, BigDecimal.valueOf(5)));
+    productRepository.saveAndFlush(product("Expensive", true, 3L, BigDecimal.valueOf(20)));
+
+    mockMvc.perform(get("/product")
+            .param("minPrice", "3")
+            .param("maxPrice", "10"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].name").value("Mid"));
+  }
+
+  @Test
+  void getAll_filterCombined_returnsMatchingProducts() throws Exception {
+    productRepository.saveAndFlush(product("Cola", true, 10L, BigDecimal.valueOf(2)));
+    productRepository.saveAndFlush(product("Cola Premium", true, 5L, BigDecimal.valueOf(10)));
+    productRepository.saveAndFlush(product("Chips", true, 3L, BigDecimal.valueOf(3)));
+
+    mockMvc.perform(get("/product")
+            .param("name", "cola")
+            .param("maxPrice", "5"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].name").value("Cola"));
+  }
+
+  @Test
+  void getAll_filterExcludesDisabledProducts() throws Exception {
+    productRepository.saveAndFlush(product("Cola", true, 10L));
+    productRepository.saveAndFlush(product("Cola Hidden", false, 5L));
+
+    mockMvc.perform(get("/product").param("name", "cola"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].name").value("Cola"));
+  }
+
+  @Test
+  void getById_withoutAuthentication_returnsProduct() throws Exception {
     Product product = productRepository.saveAndFlush(product("Water", true, 5L));
-    product.setAmount(8L);
-    product.setDescription("Updated water");
-    productRepository.saveAndFlush(product);
 
     mockMvc.perform(get("/product/{id}", product.getId()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(product.getId().toString()))
         .andExpect(jsonPath("$.name").value("Water"))
-        .andExpect(jsonPath("$.amount").value(8))
-        .andExpect(jsonPath("$.history.length()").value(2))
-        .andExpect(jsonPath("$.history[0].revisionNumber").isNumber())
-        .andExpect(jsonPath("$.history[0].revisionTimestamp").exists());
+        .andExpect(jsonPath("$.amount").value(5))
+        .andExpect(jsonPath("$.history").doesNotExist());
   }
 
   @Test
@@ -118,33 +164,24 @@ class ProductIntegrationTests {
   void getById_disabledProductWithAdminToken_returns200() throws Exception {
     String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
     Product product = productRepository.saveAndFlush(product("Hidden Water", false, 5L));
-    product.setAmount(7L);
-    product.setDescription("Updated hidden water");
-    productRepository.saveAndFlush(product);
 
     mockMvc.perform(get("/product/{id}", product.getId())
             .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(product.getId().toString()))
-        .andExpect(jsonPath("$.enabled").value(false))
-        .andExpect(jsonPath("$.history.length()").value(2));
+        .andExpect(jsonPath("$.enabled").value(false));
   }
 
   @Test
-  void getById_enabledProductWithAdminToken_returnsProductWithHistory() throws Exception {
+  void getById_enabledProductWithAdminToken_returnsProduct() throws Exception {
     String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
     Product product = productRepository.saveAndFlush(product("Admin Water", true, 5L));
-    product.setAmount(6L);
-    productRepository.saveAndFlush(product);
 
     mockMvc.perform(get("/product/{id}", product.getId())
             .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(product.getId().toString()))
-        .andExpect(jsonPath("$.enabled").value(true))
-        .andExpect(jsonPath("$.history.length()").value(2))
-        .andExpect(jsonPath("$.history[0].revisionNumber").isNumber())
-        .andExpect(jsonPath("$.history[0].revisionTimestamp").exists());
+        .andExpect(jsonPath("$.enabled").value(true));
   }
 
   @Test
@@ -169,94 +206,107 @@ class ProductIntegrationTests {
   }
 
   @Test
-  void searchByName_publicAccessible_returnsEnabledProduct() throws Exception {
-    productRepository.saveAndFlush(product("Sprite", true, 11L));
-    productRepository.saveAndFlush(product("Sprite Zero", false, 4L));
+  void getAll_adminWithEnabledFilterFalse_returnsDisabledProducts() throws Exception {
+    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
+    productRepository.saveAndFlush(product("Juice", true, 4L));
+    productRepository.saveAndFlush(product("Hidden", false, 9L));
 
-    mockMvc.perform(get("/product/search/by-name").param("name", "sprite"))
+    mockMvc.perform(get("/product")
+            .param("enabled", "false")
+            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.name").value("Sprite"))
-        .andExpect(jsonPath("$.amount").value(11));
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].name").value("Hidden"))
+        .andExpect(jsonPath("$.content[0].enabled").value(false));
   }
 
   @Test
-  void searchByName_disabledProductWithoutAuthentication_returns401() throws Exception {
-    productRepository.saveAndFlush(product("Ghost Soda", false, 9L));
+  void getAll_adminWithNoEnabledFilter_returnsAllProducts() throws Exception {
+    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
+    productRepository.saveAndFlush(product("Juice", true, 4L));
+    productRepository.saveAndFlush(product("Hidden", false, 9L));
 
-    mockMvc.perform(get("/product/search/by-name").param("name", "ghost soda"))
+    mockMvc.perform(get("/product")
+            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(2))
+        .andExpect(jsonPath("$.page.totalElements").value(2));
+  }
+
+  @Test
+  void getAll_userWithEnabledFilterFalse_stillReturnsOnlyEnabled() throws Exception {
+    String userToken = accessTokenFor(USER_EMAIL, PASSWORD);
+    productRepository.saveAndFlush(product("Juice", true, 4L));
+    productRepository.saveAndFlush(product("Hidden", false, 9L));
+
+    mockMvc.perform(get("/product")
+            .param("enabled", "false")
+            .header(HttpHeaders.AUTHORIZATION, bearer(userToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].name").value("Juice"));
+  }
+
+  @Test
+  void getAll_anonymousWithEnabledFilterFalse_stillReturnsOnlyEnabled() throws Exception {
+    productRepository.saveAndFlush(product("Juice", true, 4L));
+    productRepository.saveAndFlush(product("Hidden", false, 9L));
+
+    mockMvc.perform(get("/product").param("enabled", "false"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].name").value("Juice"));
+  }
+  //endregion
+
+  //region History Endpoint Tests
+  @Test
+  void getHistory_publicAccessible_returnsRevisions() throws Exception {
+    Product product = productRepository.saveAndFlush(product("Water", true, 5L));
+    product.setAmount(8L);
+    product.setDescription("Updated water");
+    productRepository.saveAndFlush(product);
+
+    mockMvc.perform(get("/product/{id}/history", product.getId()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(2))
+        .andExpect(jsonPath("$[0].revisionNumber").isNumber())
+        .andExpect(jsonPath("$[0].revisionTimestamp").exists());
+  }
+
+  @Test
+  void getHistory_disabledProductWithAdminToken_returns200() throws Exception {
+    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
+    Product product = productRepository.saveAndFlush(product("Hidden Water", false, 5L));
+
+    mockMvc.perform(get("/product/{id}/history", product.getId())
+            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(1));
+  }
+
+  @Test
+  void getHistory_disabledProductWithoutAuthentication_returns401() throws Exception {
+    Product product = productRepository.saveAndFlush(product("Hidden Water", false, 5L));
+
+    mockMvc.perform(get("/product/{id}/history", product.getId()))
         .andExpect(status().isUnauthorized());
   }
 
   @Test
-  void searchByName_disabledProductWithUserToken_returns403() throws Exception {
+  void getHistory_disabledProductWithUserToken_returns403() throws Exception {
     String userToken = accessTokenFor(USER_EMAIL, PASSWORD);
-    productRepository.saveAndFlush(product("Ghost Soda", false, 9L));
+    Product product = productRepository.saveAndFlush(product("Hidden Water", false, 5L));
 
-    mockMvc.perform(get("/product/search/by-name")
-            .param("name", "ghost soda")
+    mockMvc.perform(get("/product/{id}/history", product.getId())
             .header(HttpHeaders.AUTHORIZATION, bearer(userToken)))
         .andExpect(status().isForbidden());
   }
 
   @Test
-  void searchByName_disabledProductWithAdminToken_returns200() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
-    productRepository.saveAndFlush(product("Ghost Soda", false, 9L));
-
-    mockMvc.perform(get("/product/search/by-name")
-            .param("name", "ghost soda")
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.name").value("Ghost Soda"))
-        .andExpect(jsonPath("$.enabled").value(false));
-  }
-
-  @Test
-  void getAllDisabled_withAdminToken_returnsOnlyDisabledProducts() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
-    productRepository.saveAndFlush(product("Juice", true, 4L));
-    productRepository.saveAndFlush(product("Hidden", false, 9L));
-
-    mockMvc.perform(get("/product/disabled")
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(1))
-        .andExpect(jsonPath("$[0].name").value("Hidden"))
-        .andExpect(jsonPath("$[0].enabled").value(false));
-  }
-
-  @Test
-  void getAllDisabled_withoutAuthentication_returns401() throws Exception {
-    mockMvc.perform(get("/product/disabled"))
-        .andExpect(status().isUnauthorized());
-  }
-
-  @Test
-  void getAllDisabled_withUserToken_returns403() throws Exception {
-    String userToken = accessTokenFor(USER_EMAIL, PASSWORD);
-
-    mockMvc.perform(get("/product/disabled")
-            .header(HttpHeaders.AUTHORIZATION, bearer(userToken)))
-        .andExpect(status().isForbidden())
-        .andExpect(jsonPath("$.title").value("Access Denied"))
-        .andExpect(jsonPath("$.status").value(403))
-        .andExpect(jsonPath("$.detail").value("Access to '/product/disabled' is forbidden."))
-        .andExpect(jsonPath("$.instance").value("/product/disabled"));
-  }
-
-  @Test
-  void searchByName_nonExistentProduct_returns404() throws Exception {
-    mockMvc.perform(get("/product/search/by-name").param("name", "missing"))
+  void getHistory_nonExistentProduct_returns404() throws Exception {
+    mockMvc.perform(get("/product/{id}/history", UUID.randomUUID()))
         .andExpect(status().isNotFound());
-  }
-
-  @Test
-  void searchByName_missingParam_returns400() throws Exception {
-    mockMvc.perform(get("/product/search/by-name"))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.title").value("Request Binding Failed"))
-        .andExpect(jsonPath("$.status").value(400))
-        .andExpect(jsonPath("$.instance").value("/product/search/by-name"));
   }
   //endregion
 
@@ -394,10 +444,14 @@ class ProductIntegrationTests {
   }
 
   private Product product(String name, boolean enabled, long amount) {
+    return product(name, enabled, amount, BigDecimal.valueOf(2));
+  }
+
+  private Product product(String name, boolean enabled, long amount, BigDecimal price) {
     Product product = new Product();
     product.setName(name);
     product.setDescription(name + " description");
-    product.setPrice(BigDecimal.valueOf(2));
+    product.setPrice(price);
     product.setDiscount(0);
     product.setEnabled(enabled);
     product.setAmount(amount);
@@ -406,7 +460,7 @@ class ProductIntegrationTests {
 
   private String validWriteBody(String name, String description, long amount) {
     return """
-        {"name":"%s","description":"%s","price":2.5,"discount":0.0,"enabled":false,"amount":%d}
+        {"name":"%s","description":"%s","price":2.5,"discount":0,"enabled":false,"amount":%d}
         """.formatted(name, description, amount);
   }
 
