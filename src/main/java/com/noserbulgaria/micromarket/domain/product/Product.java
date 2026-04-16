@@ -35,9 +35,9 @@ public class Product extends ExtendedEntity {
   @Column(nullable = false)
   private BigDecimal price;
 
-  @Column(nullable = false)
   @Min(0)
   @Max(100)
+  @Column(nullable = false)
   private Integer discount;
 
   @Column(nullable = false)

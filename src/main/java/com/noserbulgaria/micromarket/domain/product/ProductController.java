@@ -1,8 +1,8 @@
 package com.noserbulgaria.micromarket.domain.product;
 
 import com.noserbulgaria.micromarket.domain.product.dto.ProductDto;
+import com.noserbulgaria.micromarket.domain.product.dto.ProductRequestDto;
 import com.noserbulgaria.micromarket.domain.product.dto.ProductWithHistoryDto;
-import com.noserbulgaria.micromarket.domain.product.dto.ProductWriteDto;
 import com.noserbulgaria.micromarket.security.user.CustomUserDetails;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -87,7 +87,7 @@ public class ProductController {
   @PreAuthorize("hasRole('ADMINISTRATOR')")
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
-  public ProductDto create(@Valid @RequestBody ProductWriteDto productDto) {
+  public ProductDto create(@Valid @RequestBody ProductRequestDto productDto) {
     return productService.create(productDto);
   }
 
@@ -104,9 +104,8 @@ public class ProductController {
   @PreAuthorize("hasRole('ADMINISTRATOR')")
   @PutMapping("/{id}")
   public ProductDto update(
-      @Parameter(description = "Product ID")
-      @PathVariable UUID id,
-      @Valid @RequestBody ProductWriteDto productDto
+      @Parameter(description = "Product ID") @PathVariable UUID id,
+      @Valid @RequestBody ProductRequestDto productDto
   ) {
     return productService.updateOrThrow(id, productDto);
   }

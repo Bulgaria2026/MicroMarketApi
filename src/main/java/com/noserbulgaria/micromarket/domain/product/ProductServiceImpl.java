@@ -2,8 +2,8 @@ package com.noserbulgaria.micromarket.domain.product;
 
 import com.noserbulgaria.micromarket.domain.product.dto.ProductDto;
 import com.noserbulgaria.micromarket.domain.product.dto.ProductMapper;
+import com.noserbulgaria.micromarket.domain.product.dto.ProductRequestDto;
 import com.noserbulgaria.micromarket.domain.product.dto.ProductWithHistoryDto;
-import com.noserbulgaria.micromarket.domain.product.dto.ProductWriteDto;
 import com.noserbulgaria.micromarket.exception.BadRequestException;
 import com.noserbulgaria.micromarket.exception.EntityNotFoundException;
 import com.noserbulgaria.micromarket.exception.UnauthorizedException;
@@ -46,7 +46,7 @@ public class ProductServiceImpl extends ExtendedServiceImpl<Product, ProductDto,
   }
 
   @Override
-  public ProductDto create(ProductWriteDto dto) {
+  public ProductDto create(ProductRequestDto dto) {
     return toProductDto(productRepository.save(super.mapper.toEntity(dto)));
   }
 
@@ -114,7 +114,7 @@ public class ProductServiceImpl extends ExtendedServiceImpl<Product, ProductDto,
   }
 
   @Override
-  public ProductDto updateOrThrow(UUID id, ProductWriteDto dto) {
+  public ProductDto updateOrThrow(UUID id, ProductRequestDto dto) {
     Product product = findProductByIdOrThrow(id);
     super.mapper.updateProductFromWriteDto(dto, product);
     return toProductDto(productRepository.save(product));
@@ -124,7 +124,7 @@ public class ProductServiceImpl extends ExtendedServiceImpl<Product, ProductDto,
   public boolean delete(UUID id) {
     return productRepository.findById(id)
         .map(product -> {
-          if (Boolean.TRUE.equals(product.getEnabled())) {
+          if (product.getEnabled()) {
             throw new BadRequestException("Product must be disabled before it can be deleted");
           }
 
@@ -138,7 +138,7 @@ public class ProductServiceImpl extends ExtendedServiceImpl<Product, ProductDto,
   @Override
   public void deleteOrThrow(UUID id) {
     Product product = findProductByIdOrThrow(id);
-    if (Boolean.TRUE.equals(product.getEnabled())) {
+    if (product.getEnabled()) {
       throw new BadRequestException("Product must be disabled before it can be deleted");
     }
 
@@ -151,7 +151,7 @@ public class ProductServiceImpl extends ExtendedServiceImpl<Product, ProductDto,
   public ProductDto findByNameOrThrow(String name, boolean includeDisabled) {
     log.debug("Finding product by name with exception on miss: {}", name);
     Product product = findProductByNameOrThrow(name);
-    if (!includeDisabled && Boolean.FALSE.equals(product.getEnabled())) {
+    if (!includeDisabled && !product.getEnabled()) {
       throw new EntityNotFoundException("Product not found with name: " + name);
     }
 
@@ -164,7 +164,7 @@ public class ProductServiceImpl extends ExtendedServiceImpl<Product, ProductDto,
     log.debug("Finding all disabled products");
     return productRepository.findAll()
         .stream()
-        .filter(product -> Boolean.FALSE.equals(product.getEnabled()))
+        .filter(product -> !product.getEnabled())
         .map(this::toProductDto)
         .collect(Collectors.toList());
   }

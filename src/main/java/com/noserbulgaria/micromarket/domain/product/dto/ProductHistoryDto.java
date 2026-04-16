@@ -1,5 +1,7 @@
 package com.noserbulgaria.micromarket.domain.product.dto;
 
+import com.noserbulgaria.micromarket.generic.ExtendedDto;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -30,5 +32,5 @@ public record ProductHistoryDto(
 
     String revisionType
 
-) {
+) implements ExtendedDto {
 }

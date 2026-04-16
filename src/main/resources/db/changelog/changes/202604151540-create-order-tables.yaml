@@ -49,6 +49,11 @@ databaseChangeLog:
                     foreignKeyName: fk_order_item_order
                     references: orders(id)
               - column:
+                  name: product_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+              - column:
                   name: quantity
                   type: int
                   constraints:

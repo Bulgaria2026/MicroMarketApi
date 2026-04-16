@@ -1,20 +1,25 @@
 package com.noserbulgaria.micromarket.domain.order.dto;
 
+import com.noserbulgaria.micromarket.domain.order.OrderStatusType;
+import com.noserbulgaria.micromarket.generic.ExtendedDto;
+
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 
-import com.noserbulgaria.micromarket.domain.order.OrderStatusType;
-
-import io.swagger.v3.oas.annotations.media.Schema;
-
-@Schema(description = "Order details")
 public record OrderResponseDTO(
-    @Schema(description = "Unique identifier of the order") UUID id,
-    @Schema(description = "Current status of the order") OrderStatusType status,
-    @Schema(description = "ID of the customer who placed the order") UUID customerId,
-    @Schema(description = "List of items in the order") Set<OrderItemRequestDTO> orderItems,
-    @Schema(description = "Timestamp when the order was created") Instant createdAt,
-    @Schema(description = "Timestamp when the order was last updated") Instant updatedAt
-) {
+
+    UUID id,
+
+    OrderStatusType status,
+
+    UUID customerId,
+
+    Set<OrderItemRequestDTO> orderItems,
+
+    Instant createdAt,
+
+    Instant updatedAt
+
+) implements ExtendedDto {
 }

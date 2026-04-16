@@ -2,7 +2,7 @@ package com.noserbulgaria.micromarket.domain.product;
 
 import com.noserbulgaria.micromarket.domain.product.dto.ProductDto;
 import com.noserbulgaria.micromarket.domain.product.dto.ProductWithHistoryDto;
-import com.noserbulgaria.micromarket.domain.product.dto.ProductWriteDto;
+import com.noserbulgaria.micromarket.domain.product.dto.ProductRequestDto;
 import com.noserbulgaria.micromarket.generic.ExtendedService;
 import com.noserbulgaria.micromarket.security.user.CustomUserDetails;
 import org.jspecify.annotations.NullMarked;
@@ -18,7 +18,7 @@ import java.util.UUID;
 @NullMarked
 public interface ProductService extends ExtendedService<Product, ProductDto> {
 
-  ProductDto create(ProductWriteDto productWriteDto);
+  ProductDto create(ProductRequestDto productWriteDto);
 
   /**
    * Returns the public or admin representation of a product for the current caller.
@@ -60,7 +60,7 @@ public interface ProductService extends ExtendedService<Product, ProductDto> {
    * @param productWriteDto the new product state
    * @return the updated product DTO
    */
-  ProductDto updateOrThrow(UUID id, ProductWriteDto productWriteDto);
+  ProductDto updateOrThrow(UUID id, ProductRequestDto productWriteDto);
 
   /**
    * Deletes a product or throws if it does not exist.
