@@ -1,7 +1,7 @@
 package com.noserbulgaria.micromarket.domain.product;
 
 import com.noserbulgaria.micromarket.domain.product.dto.*;
-import com.noserbulgaria.micromarket.exception.BadRequestApiException;
+import com.noserbulgaria.micromarket.exception.ForbiddenApiException;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
 import com.noserbulgaria.micromarket.exception.UnauthorizedApiException;
 import com.noserbulgaria.micromarket.security.user.CustomUserDetails;
@@ -10,12 +10,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -48,19 +46,7 @@ public class ProductService {
 
   @Transactional(readOnly = true)
   public Page<ProductResponseDto> findAll(Pageable pageable) {
-    List<ProductResponseDto> enabledProducts = productRepository.findAll()
-        .stream()
-        .filter(Product::isEnabled)
-        .map(productMapper::toDto)
-        .toList();
-
-    int start = (int) pageable.getOffset();
-    int end = Math.min(start + pageable.getPageSize(), enabledProducts.size());
-    List<ProductResponseDto> pageContent = start >= enabledProducts.size()
-        ? new ArrayList<>()
-        : enabledProducts.subList(start, end);
-
-    return new PageImpl<>(pageContent, pageable, enabledProducts.size());
+    return productRepository.findAllByEnabledTrue(pageable).map(productMapper::toDto);
   }
 
   public ProductResponseDto updateOrThrow(UUID id, ProductRequestDto dto) {
@@ -69,22 +55,9 @@ public class ProductService {
     return productMapper.toDto(productRepository.save(product));
   }
 
-  public void deleteOrThrow(UUID id) {
-    Product product = findProductByIdOrThrow(id);
-    if (product.isEnabled()) {
-      throw new BadRequestApiException("Cannot delete enabled product '%s'".formatted(product.getName()));
-    }
-
-    productRepository.deleteAuditHistoryByProductId(id);
-    productRepository.delete(product);
-  }
-
   @Transactional(readOnly = true)
   public List<ProductResponseDto> findAllDisabled() {
-    log.debug("Finding all disabled products");
-    return productRepository.findAll()
-        .stream()
-        .filter(product -> !product.isEnabled())
+    return productRepository.findAllByEnabledFalse().stream()
         .map(productMapper::toDto)
         .toList();
   }
@@ -95,10 +68,7 @@ public class ProductService {
   }
 
   private Product findProductByNameOrThrow(String name) {
-    return productRepository.findAll()
-        .stream()
-        .filter(product -> product.getName().equalsIgnoreCase(name))
-        .findFirst()
+    return productRepository.findByNameIgnoreCase(name)
         .orElseThrow(() -> new NotFoundApiException("Product with name '%s' not found".formatted(name)));
   }
 
@@ -114,8 +84,16 @@ public class ProductService {
   }
 
   private void validateDisabledProductAccess(Product product, @Nullable CustomUserDetails userDetails) {
-    if (!product.isEnabled() && (userDetails == null || userDetails.getRole() != Role.ADMINISTRATOR)) {
-      throw new UnauthorizedApiException("Access to disabled product '%s' requires administrator role".formatted(product.getName()));
+    if (product.isEnabled()) {
+      return;
+    }
+    if (userDetails == null) {
+      throw new UnauthorizedApiException(
+          "Authentication is required to access disabled product '%s'".formatted(product.getName()));
+    }
+    if (userDetails.getRole() != Role.ADMINISTRATOR) {
+      throw new ForbiddenApiException(
+          "Access to disabled product '%s' requires administrator role".formatted(product.getName()));
     }
   }
 }

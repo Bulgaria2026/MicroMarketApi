@@ -11,13 +11,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -41,17 +40,8 @@ public class ProductController {
 
   @Operation(summary = "Get all products with pagination")
   @GetMapping
-  public Page<ProductResponseDto> getAll(
-      @Parameter(description = "Page number (0-indexed)")
-      @RequestParam(defaultValue = "0") int page,
-      @Parameter(description = "Page size")
-      @RequestParam(defaultValue = "10") int size,
-      @Parameter(description = "Sort field")
-      @RequestParam(defaultValue = "createdAt") String sort
-  ) {
-    return productService.findAll(
-        PageRequest.of(page, size, Sort.by(sort).descending())
-    );
+  public Page<ProductResponseDto> getAll(@ParameterObject Pageable pageable) {
+    return productService.findAll(pageable);
   }
 
   @Operation(summary = "Get product by ID")
@@ -108,13 +98,4 @@ public class ProductController {
     return productService.updateOrThrow(id, productDto);
   }
 
-  @Operation(summary = "Delete a product")
-  @ApiResponse(responseCode = "204", description = "Product deleted successfully")
-  @ApiResponse(responseCode = "404", description = "Product not found")
-  @PreAuthorize("hasRole('ADMINISTRATOR')")
-  @DeleteMapping("/{id}")
-  @ResponseStatus(HttpStatus.NO_CONTENT)
-  public void delete(@PathVariable UUID id) {
-    productService.deleteOrThrow(id);
-  }
 }

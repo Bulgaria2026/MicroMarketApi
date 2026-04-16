@@ -21,7 +21,6 @@ import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.UUID;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -102,18 +101,18 @@ class ProductIntegrationTests {
         .andExpect(jsonPath("$.type").value("about:blank"))
         .andExpect(jsonPath("$.title").value("Unauthorized"))
         .andExpect(jsonPath("$.status").value(401))
-        .andExpect(jsonPath("$.detail").value("Access to disabled product 'Hidden Water' requires administrator role"))
+        .andExpect(jsonPath("$.detail").value("Authentication is required to access disabled product 'Hidden Water'"))
         .andExpect(jsonPath("$.instance").value("/product/" + product.getId()));
   }
 
   @Test
-  void getById_disabledProductWithUserToken_returns401() throws Exception {
+  void getById_disabledProductWithUserToken_returns403() throws Exception {
     String userToken = accessTokenFor(USER_EMAIL, PASSWORD);
     Product product = productRepository.saveAndFlush(product("Hidden Water", false, 5L));
 
     mockMvc.perform(get("/product/{id}", product.getId())
             .header(HttpHeaders.AUTHORIZATION, bearer(userToken)))
-        .andExpect(status().isUnauthorized());
+        .andExpect(status().isForbidden());
   }
 
   @Test
@@ -192,14 +191,14 @@ class ProductIntegrationTests {
   }
 
   @Test
-  void searchByName_disabledProductWithUserToken_returns401() throws Exception {
+  void searchByName_disabledProductWithUserToken_returns403() throws Exception {
     String userToken = accessTokenFor(USER_EMAIL, PASSWORD);
     productRepository.saveAndFlush(product("Ghost Soda", false, 9L));
 
     mockMvc.perform(get("/product/search/by-name")
             .param("name", "ghost soda")
             .header(HttpHeaders.AUTHORIZATION, bearer(userToken)))
-        .andExpect(status().isUnauthorized());
+        .andExpect(status().isForbidden());
   }
 
   @Test
@@ -390,66 +389,6 @@ class ProductIntegrationTests {
         .andExpect(status().isBadRequest());
   }
 
-  @Test
-  void delete_withAdminToken_returns204() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
-    Product product = productRepository.saveAndFlush(product("Old", false, 1L));
-
-    mockMvc.perform(delete("/product/{id}", product.getId())
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
-        .andExpect(status().isNoContent());
-  }
-
-  @Test
-  void delete_withoutAuthentication_returns401() throws Exception {
-    Product product = productRepository.saveAndFlush(product("Old", false, 1L));
-
-    mockMvc.perform(delete("/product/{id}", product.getId()))
-        .andExpect(status().isUnauthorized());
-  }
-
-  @Test
-  void delete_withUserToken_returns403() throws Exception {
-    String userToken = accessTokenFor(USER_EMAIL, PASSWORD);
-    Product product = productRepository.saveAndFlush(product("Old", false, 1L));
-
-    mockMvc.perform(delete("/product/{id}", product.getId())
-            .header(HttpHeaders.AUTHORIZATION, bearer(userToken)))
-        .andExpect(status().isForbidden());
-  }
-
-  @Test
-  void delete_nonExistentProduct_returns404() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
-
-    mockMvc.perform(delete("/product/{id}", UUID.randomUUID())
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
-        .andExpect(status().isNotFound());
-  }
-
-  @Test
-  void delete_invalidUuid_returns400() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
-
-    mockMvc.perform(delete("/product/{id}", "not-a-uuid")
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
-        .andExpect(status().isBadRequest());
-  }
-
-  @Test
-  void delete_enabledProduct_returns400() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
-    Product product = productRepository.saveAndFlush(product("Still Active", true, 1L));
-
-    mockMvc.perform(delete("/product/{id}", product.getId())
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.type").value("about:blank"))
-        .andExpect(jsonPath("$.title").value("Bad Request"))
-        .andExpect(jsonPath("$.status").value(400))
-        .andExpect(jsonPath("$.detail").value("Cannot delete enabled product 'Still Active'"))
-        .andExpect(jsonPath("$.instance").value("/product/" + product.getId()));
-  }
   //endregion
 
   private User createUser(String email, Role role) {
