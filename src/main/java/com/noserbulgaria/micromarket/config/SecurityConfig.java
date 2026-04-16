@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
@@ -47,6 +48,16 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+  private static final String[] AUTHENTICATED_GET_ENDPOINTS = {
+      "/product/disabled"
+  };
+
+  private static final String[] PUBLIC_GET_ENDPOINTS = {
+      "/product",
+      "/product/search/by-name",
+      "/product/{id}"
+  };
+
   private final RSAPublicKey rsaPublicKey;
   private final RSAPrivateKey rsaPrivateKey;
 
@@ -58,13 +69,12 @@ public class SecurityConfig {
     http
         .cors(Customizer.withDefaults())
         .csrf(AbstractHttpConfigurer::disable)
-        .sessionManagement(
-            session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth
+            .requestMatchers(HttpMethod.GET, AUTHENTICATED_GET_ENDPOINTS).authenticated()
+            .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
             .requestMatchers(
                 "/auth/**",
-                "/product/public",
-                "/product/public/**",
                 "/swagger-ui/**",
                 "/v3/api-docs/**"
             ).permitAll()
