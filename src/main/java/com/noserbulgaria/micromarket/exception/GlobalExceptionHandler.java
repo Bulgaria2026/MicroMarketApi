@@ -88,12 +88,10 @@ public class GlobalExceptionHandler {
     return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
   }
 
-  @ExceptionHandler(
-      {
-          MethodArgumentTypeMismatchException.class,
-          MissingServletRequestParameterException.class
-      }
-  )
+  @ExceptionHandler({
+      MethodArgumentTypeMismatchException.class,
+      MissingServletRequestParameterException.class
+  })
   public ResponseEntity<ApiErrorResponse> handleRequestBindingException(
       Exception ex,
       WebRequest request
@@ -107,22 +105,6 @@ public class GlobalExceptionHandler {
     );
 
     return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
-  }
-
-  @ExceptionHandler(DuplicateEmailException.class)
-  public ResponseEntity<ApiErrorResponse> handleDuplicateEmailException(
-      DuplicateEmailException ex,
-      WebRequest request
-  ) {
-    ApiErrorResponse error = new ApiErrorResponse(
-        Instant.now(),
-        HttpStatus.CONFLICT.value(),
-        "Conflict",
-        messageOrFallback(ex, "Conflict"),
-        request.getDescription(false).replace("uri=", "")
-    );
-
-    return new ResponseEntity<>(error, HttpStatus.CONFLICT);
   }
   //endregion
 
