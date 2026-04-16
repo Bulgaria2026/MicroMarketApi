@@ -9,9 +9,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import org.hibernate.envers.Audited;
-import org.jspecify.annotations.NullMarked;
-import org.jspecify.annotations.Nullable;
-
 import java.math.BigDecimal;
 
 @Data
@@ -19,7 +16,7 @@ import java.math.BigDecimal;
 @Entity
 @Audited
 @EqualsAndHashCode(callSuper = true)
-@NullMarked
+@SuppressWarnings("NullAway.Init")
 public class Product extends ExtendedEntity {
 
   @Column(nullable = false, length = 255)
