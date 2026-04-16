@@ -103,4 +103,13 @@ public class TokenService {
   public long getAccessTokenExpirationSeconds() {
     return accessTokenExpiration.toSeconds();
   }
+
+  /**
+   * Returns the configured refresh token lifetime.
+   *
+   * @return refresh token expiration duration
+   */
+  public Duration getRefreshTokenExpiration() {
+    return refreshTokenExpiration;
+  }
 }
