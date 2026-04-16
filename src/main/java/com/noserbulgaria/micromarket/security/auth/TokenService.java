@@ -1,16 +1,10 @@
 package com.noserbulgaria.micromarket.security.auth;
 
-import com.noserbulgaria.micromarket.exception.ExceptionContexts;
 import com.noserbulgaria.micromarket.exception.UnauthorizedApiException;
 import com.noserbulgaria.micromarket.security.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtClaimsSet;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtEncoder;
-import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
-import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -22,8 +16,7 @@ import java.util.UUID;
  * Generates and validates JWT access and refresh tokens.
  *
  * <p>Access tokens carry user identity and roles for API authorization.
- * Refresh tokens carry only the user ID and are used solely to get
- * new token pairs without re-authenticating.
+ * Refresh tokens carry only the user ID and are used solely to get new token pairs without re-authenticating.
  */
 @Service
 @RequiredArgsConstructor
@@ -93,11 +86,11 @@ public class TokenService {
     try {
       jwt = jwtDecoder.decode(token);
     } catch (JwtException e) {
-      throw new UnauthorizedApiException(ExceptionContexts.of("refresh-token"));
+      throw new UnauthorizedApiException("Invalid or expired refresh token");
     }
     String type = jwt.getClaimAsString(TOKEN_TYPE_CLAIM);
     if (!REFRESH_TOKEN_TYPE.equals(type)) {
-      throw new UnauthorizedApiException(ExceptionContexts.of(type == null ? "missing" : type));
+      throw new UnauthorizedApiException("Expected refresh token but got '%s'".formatted(type == null ? "unknown" : type));
     }
     return UUID.fromString(jwt.getSubject());
   }

@@ -144,7 +144,7 @@ class OrderControllerTest {
         .andExpect(jsonPath("$.type").value("about:blank"))
         .andExpect(jsonPath("$.title").value("Not Found"))
         .andExpect(jsonPath("$.status").value(404))
-        .andExpect(jsonPath("$.detail").value("Resource not found: '%s'.".formatted(orderId)))
+        .andExpect(jsonPath("$.detail").value("Order with id '%s' not found".formatted(orderId)))
         .andExpect(jsonPath("$.instance").value("/order/" + orderId));
   }
 }

@@ -4,7 +4,7 @@ import org.springframework.security.core.AuthenticationException;
 
 public class UnauthorizedApiException extends AuthenticationException {
 
-  public UnauthorizedApiException(ExceptionContext context) {
-    super("Unauthorized: '%s'.".formatted(context.name()));
+  public UnauthorizedApiException(String message) {
+    super(message);
   }
 }

@@ -33,7 +33,7 @@ public class OrderController {
   @ApiResponse(responseCode = "401", description = "Unauthorized, authentication required")
   @ApiResponse(responseCode = "403", description = "Forbidden, insufficient permissions")
   public Page<OrderResponseDto> findAll(@ParameterObject Pageable pageable, @ParameterObject OrderFilter filter) {
-    return orderService.findAll(new OrderSpecification(filter).withFilter(), pageable);
+    return orderService.findAll(OrderSpecification.withFilter(filter), pageable);
   }
 
   @PreAuthorize("hasRole('ADMINISTRATOR')")

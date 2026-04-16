@@ -1,22 +1,20 @@
 package com.noserbulgaria.micromarket.domain.order;
 
+import com.noserbulgaria.micromarket.generic.ExtendedEntity_;
+import lombok.experimental.UtilityClass;
 import org.springframework.data.jpa.domain.Specification;
 
-import com.noserbulgaria.micromarket.generic.ExtendedSpecification;
+import static com.noserbulgaria.micromarket.common.SpecificationBuilder.*;
 
-import lombok.RequiredArgsConstructor;
+@UtilityClass
+public class OrderSpecification {
 
-@RequiredArgsConstructor
-public class OrderSpecification extends ExtendedSpecification<Order> {
-
-  private final OrderFilter filter;
-
-  @Override
-  public Specification<Order> withFilter() {
-    return Specification.where(fromDate(
-            filter.fromDate()))
-        .and(toDate(filter.toDate()))
-        .and(equalTo(filter.customerId(), "customerId"))
-        .and(equalTo(filter.status(), "status"));
+  public static Specification<Order> withFilter(OrderFilter filter) {
+    return Specification.allOf(
+        greaterThanOrEqualTo(ExtendedEntity_.createdAt, filter.fromDate()),
+        lessThanOrEqualTo(ExtendedEntity_.createdAt, filter.toDate()),
+        equalTo(Order_.customerId, filter.customerId()),
+        equalTo(Order_.status, filter.status())
+    );
   }
 }

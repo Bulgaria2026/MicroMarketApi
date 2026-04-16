@@ -102,7 +102,7 @@ class ProductIntegrationTests {
         .andExpect(jsonPath("$.type").value("about:blank"))
         .andExpect(jsonPath("$.title").value("Unauthorized"))
         .andExpect(jsonPath("$.status").value(401))
-        .andExpect(jsonPath("$.detail").value("Unauthorized: 'Hidden Water'."))
+        .andExpect(jsonPath("$.detail").value("Access to disabled product 'Hidden Water' requires administrator role"))
         .andExpect(jsonPath("$.instance").value("/product/" + product.getId()));
   }
 
@@ -158,7 +158,7 @@ class ProductIntegrationTests {
         .andExpect(jsonPath("$.type").value("about:blank"))
         .andExpect(jsonPath("$.title").value("Not Found"))
         .andExpect(jsonPath("$.status").value(404))
-        .andExpect(jsonPath("$.detail").value("Resource not found: '%s'.".formatted(productId)))
+        .andExpect(jsonPath("$.detail").value("Product with id '%s' not found".formatted(productId)))
         .andExpect(jsonPath("$.instance").value("/product/" + productId));
   }
 
@@ -447,7 +447,7 @@ class ProductIntegrationTests {
         .andExpect(jsonPath("$.type").value("about:blank"))
         .andExpect(jsonPath("$.title").value("Bad Request"))
         .andExpect(jsonPath("$.status").value(400))
-        .andExpect(jsonPath("$.detail").value("Bad request: 'Still Active'."))
+        .andExpect(jsonPath("$.detail").value("Cannot delete enabled product 'Still Active'"))
         .andExpect(jsonPath("$.instance").value("/product/" + product.getId()));
   }
   //endregion

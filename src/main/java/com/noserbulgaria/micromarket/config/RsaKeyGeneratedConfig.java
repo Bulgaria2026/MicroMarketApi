@@ -1,7 +1,5 @@
 package com.noserbulgaria.micromarket.config;
 
-import com.noserbulgaria.micromarket.exception.ExceptionContexts;
-import com.noserbulgaria.micromarket.exception.InternalServerApiException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -26,7 +24,7 @@ public class RsaKeyGeneratedConfig {
 
   public RsaKeyGeneratedConfig(Environment environment) {
     if (Set.of(environment.getActiveProfiles()).stream().noneMatch(DEV_PROFILES::contains)) {
-      throw new InternalServerApiException(ExceptionContexts.of("rsa-keypair"));
+      throw new IllegalStateException("No RSA keys configured and not running in a dev/test profile");
     }
     log.info("No RSA keys configured - generating ephemeral key pair for dev/test");
     try {
@@ -34,8 +32,7 @@ public class RsaKeyGeneratedConfig {
       generator.initialize(2048);
       this.keyPair = generator.generateKeyPair();
     } catch (NoSuchAlgorithmException e) {
-      log.error("Failed to generate RSA key pair", e);
-      throw new InternalServerApiException(ExceptionContexts.of("rsa-keypair"));
+      throw new IllegalStateException("Failed to generate RSA key pair", e);
     }
   }
 
