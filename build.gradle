@@ -1,13 +1,13 @@
 plugins {
-    id 'java'
-    id 'org.springframework.boot' version '4.0.5'
-    id 'io.spring.dependency-management' version '1.1.7'
-    id 'net.ltgt.errorprone' version '5.1.0'
+    id "java"
+    id "org.springframework.boot" version "4.0.5"
+    id "io.spring.dependency-management" version "1.1.7"
+    id "net.ltgt.errorprone" version "5.1.0"
 }
 
-group = 'com.noser-bulgaria'
-version = '0.0.1-SNAPSHOT'
-description = 'micro-market'
+group = "com.noser-bulgaria"
+version = "0.0.1-SNAPSHOT"
+description = "micro-market"
 
 java {
     toolchain {
@@ -19,45 +19,48 @@ repositories {
     mavenCentral()
 }
 
+ext {
+    mapstructVersion = "1.6.3"
+}
+
 dependencies {
     // Core Spring Boot Starters
-    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
-    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
-    implementation 'org.springframework.boot:spring-boot-starter-liquibase'
-    implementation 'org.hibernate.orm:hibernate-envers'
-    implementation 'org.springframework.data:spring-data-envers'
+    implementation "org.springframework.boot:spring-boot-starter-webmvc"
+    implementation "org.springframework.boot:spring-boot-starter-data-jpa"
+    implementation "org.springframework.boot:spring-boot-starter-security"
+    implementation "org.springframework.boot:spring-boot-starter-oauth2-resource-server"
+    implementation "org.springframework.boot:spring-boot-starter-liquibase"
+    implementation "org.springframework.data:spring-data-envers"
 
     // Databases & Dev Tools
-    implementation 'org.springframework.boot:spring-boot-h2console'
-    runtimeOnly 'com.h2database:h2'
-    runtimeOnly 'org.postgresql:postgresql'
-    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+    implementation "org.springframework.boot:spring-boot-h2console"
+    runtimeOnly "com.h2database:h2"
+    runtimeOnly "org.postgresql:postgresql"
+    developmentOnly "org.springframework.boot:spring-boot-devtools"
 
     // Documentation / API
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.2'
+    implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.2"
 
     // Mapping & Code Generation
-    implementation 'org.mapstruct:mapstruct:1.6.3'
-    annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
-    compileOnly 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+    implementation "org.mapstruct:mapstruct:${mapstructVersion}"
+    annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
+    compileOnly "org.projectlombok:lombok"
+    annotationProcessor "org.projectlombok:lombok"
+    annotationProcessor "org.projectlombok:lombok-mapstruct-binding:0.2.0"
 
     // Testing
-    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
-    testImplementation 'org.springframework.boot:spring-boot-starter-liquibase-test'
-    testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
-    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
-    testCompileOnly 'org.projectlombok:lombok'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    testAnnotationProcessor 'org.projectlombok:lombok'
-    testAnnotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
-    testAnnotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
+    testImplementation "org.springframework.boot:spring-boot-starter-data-jpa-test"
+    testImplementation "org.springframework.boot:spring-boot-starter-liquibase-test"
+    testImplementation "org.springframework.boot:spring-boot-starter-security-test"
+    testImplementation "org.springframework.boot:spring-boot-starter-webmvc-test"
+    testCompileOnly "org.projectlombok:lombok"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+    testAnnotationProcessor "org.projectlombok:lombok"
+    testAnnotationProcessor "org.projectlombok:lombok-mapstruct-binding:0.2.0"
+    testAnnotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
 
-    errorprone 'com.google.errorprone:error_prone_core:2.49.0'
-    errorprone 'com.uber.nullaway:nullaway:0.13.3'
+    errorprone "com.google.errorprone:error_prone_core:2.49.0"
+    errorprone "com.uber.nullaway:nullaway:0.13.3"
 }
 
 import net.ltgt.gradle.errorprone.CheckSeverity
@@ -65,17 +68,17 @@ import net.ltgt.gradle.errorprone.CheckSeverity
 tasks.withType(JavaCompile).configureEach {
     options.errorprone {
         disableAllChecks = true
-        checks.put('NullAway', CheckSeverity.ERROR)
-        option('NullAway:OnlyNullMarked', 'true')
-        option('NullAway:JSpecifyMode', 'true')
-        option('NullAway:TreatGeneratedAsUnannotated', 'true')
+        checks.put("NullAway", CheckSeverity.ERROR)
+        option("NullAway:OnlyNullMarked", "true")
+        option("NullAway:JSpecifyMode", "true")
+        option("NullAway:TreatGeneratedAsUnannotated", "true")
     }
 }
 
-tasks.withType(JavaCompile).matching { it.name.toLowerCase().contains('test') }.configureEach {
+tasks.withType(JavaCompile).matching { it.name.toLowerCase().contains("test") }.configureEach {
     options.errorprone.enabled = false
 }
 
-tasks.named('test') {
+tasks.named("test") {
     useJUnitPlatform()
 }
