@@ -4,38 +4,56 @@ import com.noserbulgaria.micromarket.domain.product.dto.ProductDto;
 import com.noserbulgaria.micromarket.domain.product.dto.ProductWithHistoryDto;
 import com.noserbulgaria.micromarket.domain.product.dto.ProductWriteDto;
 import com.noserbulgaria.micromarket.generic.ExtendedService;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
 import java.util.UUID;
 
 /**
- * Service interface for Product entity operations.
- * Extends the generic ExtendedService to provide Product-specific functionality.
+ * Service interface for Product entity operations. Extends the generic ExtendedService to provide Product-specific
+ * functionality.
  */
 public interface ProductService extends ExtendedService<Product, ProductDto> {
 
   ProductDto create(ProductWriteDto productWriteDto);
 
   /**
-   * Finds a product by its ID or throws if it does not exist.
+   * Returns the public or admin representation of a product for the current caller.
    *
-   * @param id the product ID
-   * @return the product DTO
+   * Anonymous and non-admin callers receive the public product DTO and cannot see disabled products. Administrators
+   * receive the full DTO including history and disabled products.
+   *
+   * @param id             the product ID
+   * @param authentication the current authentication, or {@code null} for anonymous requests
+   * @return the DTO visible to the current caller
    */
-  ProductWithHistoryDto getByIdOrThrow(UUID id);
+  ProductWithHistoryDto getByIdForCurrentUser(UUID id, Authentication authentication);
+
+  /**
+   * Returns the product visible to the current caller when searching by name.
+   *
+   * Anonymous and non-admin callers can only see enabled products. Administrators can also see
+   * disabled products.
+   *
+   * @param name the product name
+   * @param authentication the current authentication, or {@code null} for anonymous requests
+   * @return the product DTO visible to the current caller
+   */
+  ProductDto findByNameForCurrentUser(String name, Authentication authentication);
 
   /**
    * Finds a product by its name or throws if it does not exist.
    *
-   * @param name the product name
+   * @param name            the product name
+   * @param includeDisabled whether disabled products should be considered visible
    * @return the product DTO
    */
-  ProductDto findByNameOrThrow(String name);
+  ProductDto findByNameOrThrow(String name, boolean includeDisabled);
 
   /**
    * Updates a product or throws if it does not exist.
    *
-   * @param id the product ID
+   * @param id              the product ID
    * @param productWriteDto the new product state
    * @return the updated product DTO
    */
@@ -49,9 +67,9 @@ public interface ProductService extends ExtendedService<Product, ProductDto> {
   void deleteOrThrow(UUID id);
 
   /**
-   * Finds all enabled products.
+   * Finds all disabled products.
    *
-   * @return a list of enabled product DTOs
+   * @return a list of disabled product DTOs
    */
-  List<ProductDto> findAllEnabled();
+  List<ProductDto> findAllDisabled();
 }
