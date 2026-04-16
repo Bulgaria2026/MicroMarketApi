@@ -7,14 +7,12 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
- * Abstract base service implementation providing CRUD operations for extended entities.
- * This class implements the ExtendedService interface and uses a mapper for DTO conversions.
+ * Abstract base service implementation providing CRUD operations for extended entities. This class implements the
+ * ExtendedService interface and uses a mapper for DTO conversions.
  *
  * @param <E> The entity type extending ExtendedEntity
  * @param <D> The DTO type extending ExtendedDto
