@@ -68,8 +68,6 @@ public class ProductController {
     return productService.findByNameForCurrentUser(name, userDetails);
   }
 
-  //region
-
   @Operation(summary = "Create a new product")
   @ApiResponse(responseCode = "201", description = "Product created successfully")
   @PreAuthorize("hasRole('ADMINISTRATOR')")

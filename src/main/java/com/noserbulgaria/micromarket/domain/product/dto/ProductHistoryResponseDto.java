@@ -18,13 +18,13 @@ public record ProductHistoryResponseDto(
 
     BigDecimal price,
 
-    Integer discount,
+    int discount,
 
-    Boolean enabled,
+    boolean enabled,
 
-    Long amount,
+    long amount,
 
-    Long revisionNumber,
+    long revisionNumber,
 
     Instant revisionTimestamp,
 

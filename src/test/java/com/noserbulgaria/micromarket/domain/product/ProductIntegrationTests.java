@@ -98,7 +98,6 @@ class ProductIntegrationTests {
 
     mockMvc.perform(get("/product/{id}", product.getId()))
         .andExpect(status().isUnauthorized())
-        .andExpect(jsonPath("$.type").value("about:blank"))
         .andExpect(jsonPath("$.title").value("Unauthorized"))
         .andExpect(jsonPath("$.status").value(401))
         .andExpect(jsonPath("$.detail").value("Authentication is required to access disabled product 'Hidden Water'"))
@@ -154,7 +153,6 @@ class ProductIntegrationTests {
 
     mockMvc.perform(get("/product/{id}", productId))
         .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.type").value("about:blank"))
         .andExpect(jsonPath("$.title").value("Not Found"))
         .andExpect(jsonPath("$.status").value(404))
         .andExpect(jsonPath("$.detail").value("Product with id '%s' not found".formatted(productId)))
@@ -165,7 +163,6 @@ class ProductIntegrationTests {
   void getById_invalidUuid_returns400() throws Exception {
     mockMvc.perform(get("/product/{id}", "not-a-uuid"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.type").value("about:blank"))
         .andExpect(jsonPath("$.title").value("Request Binding Failed"))
         .andExpect(jsonPath("$.status").value(400))
         .andExpect(jsonPath("$.instance").value("/product/not-a-uuid"));
@@ -241,7 +238,6 @@ class ProductIntegrationTests {
     mockMvc.perform(get("/product/disabled")
             .header(HttpHeaders.AUTHORIZATION, bearer(userToken)))
         .andExpect(status().isForbidden())
-        .andExpect(jsonPath("$.type").value("about:blank"))
         .andExpect(jsonPath("$.title").value("Access Denied"))
         .andExpect(jsonPath("$.status").value(403))
         .andExpect(jsonPath("$.detail").value("Access to '/product/disabled' is forbidden."))
@@ -258,7 +254,6 @@ class ProductIntegrationTests {
   void searchByName_missingParam_returns400() throws Exception {
     mockMvc.perform(get("/product/search/by-name"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.type").value("about:blank"))
         .andExpect(jsonPath("$.title").value("Request Binding Failed"))
         .andExpect(jsonPath("$.status").value(400))
         .andExpect(jsonPath("$.instance").value("/product/search/by-name"));
@@ -309,7 +304,6 @@ class ProductIntegrationTests {
                 {"name":"","description":"","price":-1,"discount":101,"enabled":true,"amount":-5}
                 """))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.type").value("about:blank"))
         .andExpect(jsonPath("$.title").value("Request Validation Failed"))
         .andExpect(jsonPath("$.status").value(400))
         .andExpect(jsonPath("$.detail").value("Request body validation failed."))

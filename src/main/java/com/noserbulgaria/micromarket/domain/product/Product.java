@@ -28,7 +28,7 @@ public class Product extends ExtendedEntity {
   @Column(nullable = false, length = 1000)
   private String description;
 
-  @Column(nullable = false)
+  @Column(nullable = false, precision = 10, scale = 2)
   private BigDecimal price;
 
   @Min(0)

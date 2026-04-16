@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: 3
+      id: 202604151540-1
       author: Cyrill Weber
       changes:
         - createTable:
@@ -29,7 +29,7 @@ databaseChangeLog:
                   name: updated_at
                   type: timestamp
   - changeSet:
-      id: 4
+      id: 202604151540-2
       author: Cyrill Weber
       changes:
         - createTable:

@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: 1
+      id: 202604151530-1
       author: Lon60
       changes:
         - createTable:
