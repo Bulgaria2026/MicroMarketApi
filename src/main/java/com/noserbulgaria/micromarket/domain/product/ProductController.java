@@ -1,8 +1,8 @@
 package com.noserbulgaria.micromarket.domain.product;
 
-import com.noserbulgaria.micromarket.domain.product.dto.ProductDto;
+import com.noserbulgaria.micromarket.domain.product.dto.ProductResponseDto;
 import com.noserbulgaria.micromarket.domain.product.dto.ProductRequestDto;
-import com.noserbulgaria.micromarket.domain.product.dto.ProductWithHistoryDto;
+import com.noserbulgaria.micromarket.domain.product.dto.ProductWithHistoryResponseDto;
 import com.noserbulgaria.micromarket.security.user.CustomUserDetails;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -40,7 +41,7 @@ public class ProductController {
 
   @Operation(summary = "Get all products with pagination")
   @GetMapping
-  public Page<ProductDto> getAll(
+  public Page<ProductResponseDto> getAll(
       @Parameter(description = "Page number (0-indexed)")
       @RequestParam(defaultValue = "0") int page,
       @Parameter(description = "Page size")
@@ -58,11 +59,9 @@ public class ProductController {
   @ApiResponse(responseCode = "401", description = "Authentication required to access a disabled product")
   @ApiResponse(responseCode = "404", description = "Product not found")
   @GetMapping("/{id}")
-  public ProductWithHistoryDto getById(
-      @Parameter(description = "Product id")
-      @PathVariable
-      UUID id,
-      @AuthenticationPrincipal CustomUserDetails userDetails
+  public ProductWithHistoryResponseDto getById(
+      @Parameter(description = "Product id") @PathVariable UUID id,
+      @AuthenticationPrincipal @Nullable CustomUserDetails userDetails
   ) {
     return productService.getByIdForCurrentUser(id, userDetails);
   }
@@ -72,10 +71,9 @@ public class ProductController {
   @ApiResponse(responseCode = "401", description = "Authentication required to access a disabled product")
   @ApiResponse(responseCode = "404", description = "Product not found")
   @GetMapping("/search/by-name")
-  public ProductDto searchByName(
-      @Parameter(description = "Product name")
-      @RequestParam String name,
-      @AuthenticationPrincipal CustomUserDetails userDetails
+  public ProductResponseDto searchByName(
+      @Parameter(description = "Product name") @RequestParam String name,
+      @AuthenticationPrincipal @Nullable CustomUserDetails userDetails
   ) {
     return productService.findByNameForCurrentUser(name, userDetails);
   }
@@ -87,14 +85,14 @@ public class ProductController {
   @PreAuthorize("hasRole('ADMINISTRATOR')")
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
-  public ProductDto create(@Valid @RequestBody ProductRequestDto productDto) {
+  public ProductResponseDto create(@Valid @RequestBody ProductRequestDto productDto) {
     return productService.create(productDto);
   }
 
   @Operation(summary = "Get all disabled products")
   @PreAuthorize("hasRole('ADMINISTRATOR')")
   @GetMapping("/disabled")
-  public List<ProductDto> getAllDisabled() {
+  public List<ProductResponseDto> getAllDisabled() {
     return productService.findAllDisabled();
   }
 
@@ -103,7 +101,7 @@ public class ProductController {
   @ApiResponse(responseCode = "404", description = "Product not found")
   @PreAuthorize("hasRole('ADMINISTRATOR')")
   @PutMapping("/{id}")
-  public ProductDto update(
+  public ProductResponseDto update(
       @Parameter(description = "Product ID") @PathVariable UUID id,
       @Valid @RequestBody ProductRequestDto productDto
   ) {

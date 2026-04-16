@@ -1,7 +1,6 @@
 package com.noserbulgaria.micromarket.domain.order.dto;
 
 import com.noserbulgaria.micromarket.domain.order.OrderStatusType;
-import com.noserbulgaria.micromarket.generic.ExtendedDto;
 
 import java.time.Instant;
 import java.util.Set;
@@ -15,11 +14,11 @@ public record OrderResponseDto(
 
     UUID customerId,
 
-    Set<OrderItemRequestDto> orderItems,
+    Set<OrderItemResponseDto> orderItems,
 
     Instant createdAt,
 
     Instant updatedAt
 
-) implements ExtendedDto {
+) {
 }

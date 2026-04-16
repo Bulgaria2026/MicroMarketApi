@@ -3,7 +3,12 @@ package com.noserbulgaria.micromarket.domain.order;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.jspecify.annotations.Nullable;
+
 public record OrderFilter(
-    Instant fromDate, Instant toDate, UUID customerId, OrderStatusType status
+    @Nullable Instant fromDate,
+    @Nullable Instant toDate,
+    @Nullable UUID customerId,
+    @Nullable OrderStatusType status
 ) {
 }

@@ -1,78 +1,117 @@
 package com.noserbulgaria.micromarket.domain.product;
 
-import com.noserbulgaria.micromarket.domain.product.dto.ProductDto;
-import com.noserbulgaria.micromarket.domain.product.dto.ProductWithHistoryDto;
+import com.noserbulgaria.micromarket.domain.product.dto.ProductResponseDto;
+import com.noserbulgaria.micromarket.domain.product.dto.ProductMapper;
 import com.noserbulgaria.micromarket.domain.product.dto.ProductRequestDto;
-import com.noserbulgaria.micromarket.generic.ExtendedService;
+import com.noserbulgaria.micromarket.domain.product.dto.ProductWithHistoryResponseDto;
+import com.noserbulgaria.micromarket.exception.BadRequestException;
+import com.noserbulgaria.micromarket.exception.EntityNotFoundException;
+import com.noserbulgaria.micromarket.exception.UnauthorizedException;
 import com.noserbulgaria.micromarket.security.user.CustomUserDetails;
-import org.jspecify.annotations.NullMarked;
+import com.noserbulgaria.micromarket.security.user.Role;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Service interface for Product entity operations. Extends the generic ExtendedService to provide Product-specific
- * functionality.
- */
-@NullMarked
-public interface ProductService extends ExtendedService<Product, ProductDto> {
+@Slf4j
+@Service
+@Transactional
+@RequiredArgsConstructor
+public class ProductService {
 
-  ProductDto create(ProductRequestDto productWriteDto);
+  private final ProductRepository productRepository;
+  private final ProductMapper productMapper;
+  private final ProductHistoryService productHistoryService;
 
-  /**
-   * Returns the public or admin representation of a product for the current caller.
-   *
-   * Anonymous and non-admin callers receive the public product DTO and cannot see disabled products. Administrators
-   * receive the full DTO including history and disabled products.
-   *
-   * @param id          the product ID
-   * @param userDetails the current userDetails, or {@code null} for anonymous requests
-   * @return the DTO visible to the current caller
-   */
-  ProductWithHistoryDto getByIdForCurrentUser(UUID id, @Nullable CustomUserDetails userDetails);
+  public ProductResponseDto create(ProductRequestDto dto) {
+    return productMapper.toDto(productRepository.save(productMapper.toEntity(dto)));
+  }
 
-  /**
-   * Returns the product visible to the current caller when searching by name.
-   *
-   * Anonymous and non-admin callers can only see enabled products. Administrators can also see
-   * disabled products.
-   *
-   * @param name        the product name
-   * @param userDetails the current userDetails, or {@code null} for anonymous requests
-   * @return the product DTO visible to the current caller
-   */
-  ProductDto findByNameForCurrentUser(String name, @Nullable CustomUserDetails userDetails);
+  @Transactional(readOnly = true)
+  public ProductWithHistoryResponseDto getByIdForCurrentUser(UUID id, @Nullable CustomUserDetails userDetails) {
+    Product product = findProductByIdOrThrow(id);
+    validateDisabledProductAccess(product, userDetails);
+    return productMapper.toDtoWithHistory(
+        product,
+        productHistoryService.findHistoryByProductId(product.getId())
+    );
+  }
 
-  /**
-   * Finds a product by its name or throws if it does not exist.
-   *
-   * @param name            the product name
-   * @param includeDisabled whether disabled products should be considered visible
-   * @return the product DTO
-   */
-  ProductDto findByNameOrThrow(String name, boolean includeDisabled);
+  @Transactional(readOnly = true)
+  public ProductResponseDto findByNameForCurrentUser(String name, @Nullable CustomUserDetails userDetails) {
+    Product product = findProductByNameOrThrow(name);
+    validateDisabledProductAccess(product, userDetails);
+    return productMapper.toDto(product);
+  }
 
-  /**
-   * Updates a product or throws if it does not exist.
-   *
-   * @param id              the product ID
-   * @param productWriteDto the new product state
-   * @return the updated product DTO
-   */
-  ProductDto updateOrThrow(UUID id, ProductRequestDto productWriteDto);
+  @Transactional(readOnly = true)
+  public Page<ProductResponseDto> findAll(Pageable pageable) {
+    List<ProductResponseDto> enabledProducts = productRepository.findAll()
+        .stream()
+        .filter(Product::isEnabled)
+        .map(productMapper::toDto)
+        .toList();
 
-  /**
-   * Deletes a product or throws if it does not exist.
-   *
-   * @param id the product ID
-   */
-  void deleteOrThrow(UUID id);
+    int start = (int) pageable.getOffset();
+    int end = Math.min(start + pageable.getPageSize(), enabledProducts.size());
+    List<ProductResponseDto> pageContent = start >= enabledProducts.size()
+        ? new ArrayList<>()
+        : enabledProducts.subList(start, end);
 
-  /**
-   * Finds all disabled products.
-   *
-   * @return a list of disabled product DTOs
-   */
-  List<ProductDto> findAllDisabled();
+    return new PageImpl<>(pageContent, pageable, enabledProducts.size());
+  }
+
+  public ProductResponseDto updateOrThrow(UUID id, ProductRequestDto dto) {
+    Product product = findProductByIdOrThrow(id);
+    productMapper.update(dto, product);
+    return productMapper.toDto(productRepository.save(product));
+  }
+
+  public void deleteOrThrow(UUID id) {
+    Product product = findProductByIdOrThrow(id);
+    if (product.isEnabled()) {
+      throw new BadRequestException("Product must be disabled before it can be deleted");
+    }
+
+    productRepository.deleteAuditHistoryByProductId(id);
+    productRepository.delete(product);
+  }
+
+  @Transactional(readOnly = true)
+  public List<ProductResponseDto> findAllDisabled() {
+    log.debug("Finding all disabled products");
+    return productRepository.findAll()
+        .stream()
+        .filter(product -> !product.isEnabled())
+        .map(productMapper::toDto)
+        .toList();
+  }
+
+  private Product findProductByIdOrThrow(UUID id) {
+    return productRepository.findById(id)
+        .orElseThrow(() -> new EntityNotFoundException("Product not found with id: " + id));
+  }
+
+  private Product findProductByNameOrThrow(String name) {
+    return productRepository.findAll()
+        .stream()
+        .filter(product -> product.getName().equalsIgnoreCase(name))
+        .findFirst()
+        .orElseThrow(() -> new EntityNotFoundException("Product not found with name: " + name));
+  }
+
+  private void validateDisabledProductAccess(Product product, @Nullable CustomUserDetails userDetails) {
+    if (!product.isEnabled() && (userDetails == null || userDetails.getRole() != Role.ADMINISTRATOR)) {
+      throw new UnauthorizedException("Authentication required to access disabled products");
+    }
+  }
 }

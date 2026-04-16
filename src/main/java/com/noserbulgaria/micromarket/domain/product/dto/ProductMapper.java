@@ -1,39 +1,30 @@
 package com.noserbulgaria.micromarket.domain.product.dto;
 
 import com.noserbulgaria.micromarket.domain.product.Product;
-import com.noserbulgaria.micromarket.generic.ExtendedMapper;
-import org.mapstruct.Builder;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.MappingConstants;
-import org.mapstruct.MappingTarget;
-import org.mapstruct.ReportingPolicy;
+import org.mapstruct.*;
+
+import java.time.Instant;
+import java.util.List;
 
 @Mapper(
     componentModel = MappingConstants.ComponentModel.SPRING,
-    unmappedTargetPolicy = ReportingPolicy.ERROR,
-    builder = @Builder(disableBuilder = true)
+    unmappedTargetPolicy = ReportingPolicy.ERROR
 )
-public interface ProductMapper extends ExtendedMapper<Product, ProductDto> {
+public interface ProductMapper {
 
-  @Override
-  @Mapping(target = "id", ignore = true)
-  @Mapping(target = "createdAt", ignore = true)
-  @Mapping(target = "updatedAt", ignore = true)
-  Product dtoToEntity(ProductDto dto);
+  ProductResponseDto toDto(Product product);
 
-  @Mapping(target = "id", ignore = true)
-  @Mapping(target = "createdAt", ignore = true)
-  @Mapping(target = "updatedAt", ignore = true)
-  Product toEntity(ProductRequestDto dto);
+  ProductWithHistoryResponseDto toDtoWithHistory(Product product, List<ProductHistoryResponseDto> history);
+
+  ProductHistoryResponseDto toHistoryDto(Product product, long revisionNumber, Instant revisionTimestamp, String revisionType);
 
   @Mapping(target = "id", ignore = true)
   @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "updatedAt", ignore = true)
-  void updateProductFromWriteDto(ProductRequestDto dto, @MappingTarget Product product);
+  Product toEntity(ProductRequestDto request);
 
   @Mapping(target = "id", ignore = true)
   @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "updatedAt", ignore = true)
-  void updateProductFromDto(ProductDto dto, @MappingTarget Product product);
+  void update(ProductRequestDto request, @MappingTarget Product product);
 }

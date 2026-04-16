@@ -1,12 +1,10 @@
 package com.noserbulgaria.micromarket.domain.order.dto;
 
-import com.noserbulgaria.micromarket.generic.ExtendedDto;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-public record OrderItemRequestDto(
+public record OrderItemResponseDto(
 
     UUID id,
 
@@ -20,5 +18,5 @@ public record OrderItemRequestDto(
 
     Instant updatedAt
 
-) implements ExtendedDto {
+) {
 }

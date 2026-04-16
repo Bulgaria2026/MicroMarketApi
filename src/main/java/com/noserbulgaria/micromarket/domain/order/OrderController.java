@@ -8,14 +8,12 @@ import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
@@ -47,8 +45,6 @@ public class OrderController {
   @ApiResponse(responseCode = "401", description = "Unauthorized, authentication required")
   @ApiResponse(responseCode = "403", description = "Forbidden, insufficient permissions")
   public OrderResponseDto findById(@PathVariable UUID id) {
-    return orderService.findById(id)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+    return orderService.findByIdOrThrow(id);
   }
-
 }
