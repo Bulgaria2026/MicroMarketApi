@@ -1,9 +1,9 @@
 package com.noserbulgaria.micromarket.security.auth;
 
-import com.noserbulgaria.micromarket.security.auth.dto.AuthResponseDTO;
-import com.noserbulgaria.micromarket.security.auth.dto.LoginRequestDTO;
-import com.noserbulgaria.micromarket.security.auth.dto.RefreshRequestDTO;
-import com.noserbulgaria.micromarket.security.auth.dto.RegisterRequestDTO;
+import com.noserbulgaria.micromarket.security.auth.dto.AuthResponseDto;
+import com.noserbulgaria.micromarket.security.auth.dto.LoginRequestDto;
+import com.noserbulgaria.micromarket.security.auth.dto.RefreshRequestDto;
+import com.noserbulgaria.micromarket.security.auth.dto.RegisterRequestDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
@@ -28,7 +28,7 @@ public class AuthController {
   @SecurityRequirements
   @PostMapping("/register")
   @ResponseStatus(HttpStatus.CREATED)
-  public AuthResponseDTO register(@Valid @RequestBody RegisterRequestDTO request) {
+  public AuthResponseDto register(@Valid @RequestBody RegisterRequestDto request) {
     return authService.register(request);
   }
 
@@ -38,7 +38,7 @@ public class AuthController {
   @ApiResponse(responseCode = "401", description = "Invalid credentials")
   @SecurityRequirements
   @PostMapping("/login")
-  public AuthResponseDTO login(@Valid @RequestBody LoginRequestDTO request) {
+  public AuthResponseDto login(@Valid @RequestBody LoginRequestDto request) {
     return authService.login(request);
   }
 
@@ -47,7 +47,7 @@ public class AuthController {
   @ApiResponse(responseCode = "401", description = "Invalid or expired refresh token")
   @SecurityRequirements
   @PostMapping("/refresh")
-  public AuthResponseDTO refresh(@Valid @RequestBody RefreshRequestDTO request) {
+  public AuthResponseDto refresh(@Valid @RequestBody RefreshRequestDto request) {
     return authService.refresh(request);
   }
 }

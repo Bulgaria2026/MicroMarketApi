@@ -1,10 +1,10 @@
 package com.noserbulgaria.micromarket.security.auth;
 
-import com.noserbulgaria.micromarket.security.auth.dto.AuthResponseDTO;
-import com.noserbulgaria.micromarket.security.auth.dto.LoginRequestDTO;
-import com.noserbulgaria.micromarket.security.auth.dto.RefreshRequestDTO;
-import com.noserbulgaria.micromarket.security.auth.dto.RegisterRequestDTO;
-import com.noserbulgaria.micromarket.security.auth.exception.DuplicateEmailException;
+import com.noserbulgaria.micromarket.security.auth.dto.AuthResponseDto;
+import com.noserbulgaria.micromarket.security.auth.dto.LoginRequestDto;
+import com.noserbulgaria.micromarket.security.auth.dto.RefreshRequestDto;
+import com.noserbulgaria.micromarket.security.auth.dto.RegisterRequestDto;
+import com.noserbulgaria.micromarket.exception.DuplicateEmailException;
 import org.springframework.security.authentication.BadCredentialsException;
 
 /**
@@ -19,7 +19,7 @@ public interface AuthService {
    * @return access and refresh tokens for the newly created account
    * @throws DuplicateEmailException if the email is already registered
    */
-  AuthResponseDTO register(RegisterRequestDTO request);
+  AuthResponseDto register(RegisterRequestDto request);
 
   /**
    * Authenticates a user by email and password and returns a fresh token pair.
@@ -28,7 +28,7 @@ public interface AuthService {
    * @return access and refresh tokens
    * @throws BadCredentialsException if credentials are invalid
    */
-  AuthResponseDTO login(LoginRequestDTO request);
+  AuthResponseDto login(LoginRequestDto request);
 
   /**
    * Exchanges a valid refresh token for a new token pair.
@@ -37,5 +37,5 @@ public interface AuthService {
    * @return a new access and refresh token pair
    * @throws BadCredentialsException if the refresh token is invalid or expired
    */
-  AuthResponseDTO refresh(RefreshRequestDTO request);
+  AuthResponseDto refresh(RefreshRequestDto request);
 }
