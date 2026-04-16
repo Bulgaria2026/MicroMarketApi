@@ -62,3 +62,10 @@ databaseChangeLog:
                   constraints:
                     nullable: true
                   defaultValueComputed: CURRENT_TIMESTAMP
+
+        - addForeignKeyConstraint:
+            baseTableName: order_item
+            baseColumnNames: product_id
+            constraintName: fk_order_item_product
+            referencedTableName: product
+            referencedColumnNames: id

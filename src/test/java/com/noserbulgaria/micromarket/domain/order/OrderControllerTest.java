@@ -7,6 +7,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.math.BigDecimal;
 import java.util.UUID;
 
+import com.noserbulgaria.micromarket.domain.product.Product;
+import com.noserbulgaria.micromarket.domain.product.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,13 +36,19 @@ class OrderControllerTest {
   @Autowired
   private UserRepository userRepository;
 
+  @Autowired
+  private ProductRepository productRepository;
+
   private User testUser;
 
   private Order testOrder;
 
+  private Product testProduct;
+
   @BeforeEach
   void setUp() {
     orderRepository.deleteAll();
+    productRepository.deleteAll();
     userRepository.deleteAll();
 
     testUser = new User();
@@ -49,12 +57,22 @@ class OrderControllerTest {
     testUser.setRole(Role.ADMINISTRATOR);
     testUser = userRepository.saveAndFlush(testUser);
 
+    testProduct = new Product();
+    testProduct.setName("Cola");
+    testProduct.setDescription("Sparkling soft drink");
+    testProduct.setPrice(new BigDecimal("10.50"));
+    testProduct.setDiscount(0);
+    testProduct.setEnabled(true);
+    testProduct.setAmount(25L);
+    testProduct = productRepository.saveAndFlush(testProduct);
+
     testOrder = new Order();
     testOrder.setStatus(OrderStatusType.PENDING);
     testOrder.setCustomerId(testUser.getId());
 
     OrderItem item = new OrderItem();
     item.setOrder(testOrder);
+    item.setProduct(testProduct);
     item.setQuantity(2);
     item.setPriceAtPurchase(new BigDecimal("10.50"));
     testOrder.getOrderItems().add(item);
@@ -82,6 +100,7 @@ class OrderControllerTest {
         .andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()))
         .andExpect(jsonPath("$.content[0].orderItems").isArray())
         .andExpect(jsonPath("$.content[0].orderItems.length()").value(1))
+        .andExpect(jsonPath("$.content[0].orderItems[0].productId").value(testProduct.getId().toString()))
         .andExpect(jsonPath("$.content[0].orderItems[0].quantity").value(2))
         .andExpect(jsonPath("$.content[0].orderItems[0].priceAtPurchase").value(10.5));
   }
@@ -94,6 +113,7 @@ class OrderControllerTest {
         .andExpect(jsonPath("$.id").value(testOrder.getId().toString()))
         .andExpect(jsonPath("$.orderItems").isArray())
         .andExpect(jsonPath("$.orderItems.length()").value(1))
+        .andExpect(jsonPath("$.orderItems[0].productId").value(testProduct.getId().toString()))
         .andExpect(jsonPath("$.orderItems[0].quantity").value(2))
         .andExpect(jsonPath("$.orderItems[0].priceAtPurchase").value(10.5));
   }

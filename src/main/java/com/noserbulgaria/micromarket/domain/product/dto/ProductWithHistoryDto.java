@@ -1,5 +1,8 @@
 package com.noserbulgaria.micromarket.domain.product.dto;
 
+import com.noserbulgaria.micromarket.generic.ExtendedDto;
+
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -16,9 +19,9 @@ public record ProductWithHistoryDto(
 
     String description,
 
-    Double price,
+    BigDecimal price,
 
-    Double discount,
+    Integer discount,
 
     Boolean enabled,
 
@@ -26,5 +29,5 @@ public record ProductWithHistoryDto(
 
     List<ProductHistoryDto> history
 
-) {
+) implements ExtendedDto {
 }

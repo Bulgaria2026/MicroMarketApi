@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 public record RegisterRequestDTO(
+
     @NotBlank(message = "Email is required")
     @Email(message = "Invalid email format")
     @Schema(example = "user@example.com")
@@ -15,6 +16,6 @@ public record RegisterRequestDTO(
     @Size(min = 8, max = 72, message = "Password must be between 8 and 72 characters")
     @Schema(example = "securePass123")
     String password
-) {
 
+) {
 }

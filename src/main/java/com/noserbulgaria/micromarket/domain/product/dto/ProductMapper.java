@@ -25,12 +25,12 @@ public interface ProductMapper extends ExtendedMapper<Product, ProductDto> {
   @Mapping(target = "id", ignore = true)
   @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "updatedAt", ignore = true)
-  Product toEntity(ProductWriteDto dto);
+  Product toEntity(ProductRequestDto dto);
 
   @Mapping(target = "id", ignore = true)
   @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "updatedAt", ignore = true)
-  void updateProductFromWriteDto(ProductWriteDto dto, @MappingTarget Product product);
+  void updateProductFromWriteDto(ProductRequestDto dto, @MappingTarget Product product);
 
   @Mapping(target = "id", ignore = true)
   @Mapping(target = "createdAt", ignore = true)

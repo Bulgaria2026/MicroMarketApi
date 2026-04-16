@@ -1,13 +1,14 @@
 package com.noserbulgaria.micromarket.domain.product.dto;
 
 import com.noserbulgaria.micromarket.generic.ExtendedDto;
-import jakarta.validation.constraints.DecimalMax;
-import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -27,12 +28,12 @@ public record ProductDto(
 
     @NotNull(message = "Price must not be null")
     @Positive(message = "Price must be greater than 0")
-    Double price,
+    BigDecimal price,
 
     @NotNull(message = "Discount must not be null")
-    @DecimalMin(value = "0.0")
-    @DecimalMax(value = "100.0")
-    Double discount,
+    @Min(value = 0)
+    @Max(value = 100)
+    Integer discount,
 
     @NotNull(message = "Enabled status must not be null")
     Boolean enabled,
@@ -41,4 +42,5 @@ public record ProductDto(
     @PositiveOrZero(message = "Amount must be zero or greater")
     Long amount
 
-) implements ExtendedDto {}
+) implements ExtendedDto {
+}

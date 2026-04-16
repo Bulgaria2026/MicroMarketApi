@@ -1,6 +1,7 @@
 package com.noserbulgaria.micromarket.domain.product;
 
 import com.jayway.jsonpath.JsonPath;
+import com.noserbulgaria.micromarket.domain.order.OrderRepository;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
 import com.noserbulgaria.micromarket.security.user.UserRepository;
@@ -46,10 +47,14 @@ class ProductIntegrationTests {
   private ProductRepository productRepository;
 
   @Autowired
+  private OrderRepository orderRepository;
+
+  @Autowired
   private PasswordEncoder passwordEncoder;
 
   @BeforeEach
   void setUp() {
+    orderRepository.deleteAll();
     productRepository.deleteAll();
     userRepository.deleteAll();
 
