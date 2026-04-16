@@ -52,11 +52,11 @@ databaseChangeLog:
 
               - column:
                   name: price
-                  type: double
+                  type: numeric
 
               - column:
                   name: discount
-                  type: double
+                  type: integer
 
               - column:
                   name: enabled

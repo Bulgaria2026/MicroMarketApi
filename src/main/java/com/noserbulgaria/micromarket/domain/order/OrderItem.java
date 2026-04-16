@@ -25,11 +25,11 @@ public class OrderItem extends ExtendedEntity {
   @JoinColumn(name = "order_id", nullable = false)
   private Order order;
 
-  @EqualsAndHashCode.Exclude
+/*  @EqualsAndHashCode.Exclude
   @ToString.Exclude
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "product_id", nullable = false)
-  private Product product;
+  private Product product;*/
 
   @Column(nullable = false)
   private Integer quantity;

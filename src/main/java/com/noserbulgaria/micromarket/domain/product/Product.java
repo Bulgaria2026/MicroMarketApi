@@ -3,6 +3,8 @@ package com.noserbulgaria.micromarket.domain.product;
 import com.noserbulgaria.micromarket.generic.ExtendedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,6 +13,8 @@ import lombok.NoArgsConstructor;
 import org.hibernate.envers.Audited;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
+
+import java.math.BigDecimal;
 
 @Data
 @Builder
@@ -29,10 +33,12 @@ public class Product extends ExtendedEntity {
   private String description;
 
   @Column(nullable = false)
-  private Double price;
+  private BigDecimal price;
 
   @Column(nullable = false)
-  private Double discount;
+  @Min(0)
+  @Max(100)
+  private Integer discount;
 
   @Column(nullable = false)
   private Boolean enabled;

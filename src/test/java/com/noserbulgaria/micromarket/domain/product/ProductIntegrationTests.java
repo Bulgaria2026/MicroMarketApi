@@ -16,6 +16,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.math.BigDecimal;
+import java.util.Objects;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -412,7 +414,7 @@ class ProductIntegrationTests {
   private User createUser(String email, Role role) {
     User user = new User();
     user.setEmail(email);
-    user.setPassword(passwordEncoder.encode(PASSWORD));
+    user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
     user.setRole(role);
     return user;
   }
@@ -421,8 +423,8 @@ class ProductIntegrationTests {
     Product product = new Product();
     product.setName(name);
     product.setDescription(name + " description");
-    product.setPrice(2.50);
-    product.setDiscount(0.0);
+    product.setPrice(BigDecimal.valueOf(2));
+    product.setDiscount(0);
     product.setEnabled(enabled);
     product.setAmount(amount);
     return product;

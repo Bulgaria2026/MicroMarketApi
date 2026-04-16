@@ -2,6 +2,7 @@ package com.noserbulgaria.micromarket.generic;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.envers.Audited;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -18,7 +19,8 @@ import java.util.UUID;
 public abstract class ExtendedEntity {
 
   @Id
-  @GeneratedValue(strategy = GenerationType.UUID)
+  @GeneratedValue
+  @UuidGenerator(style = UuidGenerator.Style.VERSION_7)
   private UUID id;
 
   @CreatedDate
