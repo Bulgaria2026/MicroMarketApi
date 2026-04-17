@@ -2,6 +2,7 @@ package com.noserbulgaria.micromarket.security.auth;
 
 import com.noserbulgaria.micromarket.exception.UnauthorizedApiException;
 import com.noserbulgaria.micromarket.security.user.User;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.jwt.*;
@@ -33,6 +34,7 @@ public class TokenService {
   @Value("${jwt.access-token.expiration}")
   private Duration accessTokenExpiration;
 
+  @Getter
   @Value("${jwt.refresh-token.expiration}")
   private Duration refreshTokenExpiration;
 
@@ -57,42 +59,44 @@ public class TokenService {
   }
 
   /**
-   * Creates a long-lived refresh token containing only the user's identity.
+   * Creates a long-lived refresh token containing the user's identity and a unique token id.
    *
    * @param user an authenticated user
+   * @param jti  the unique token identifier (maps to the {@code jti} JWT claim)
    * @return an encoded JWT refresh token
    */
-  public String generateRefreshToken(User user) {
+  public String generateRefreshToken(User user, UUID jti) {
     Instant now = Instant.now();
     JwtClaimsSet claims = JwtClaimsSet.builder()
         .issuer(ISSUER)
         .issuedAt(now)
         .expiresAt(now.plus(refreshTokenExpiration))
         .subject(user.getId().toString())
+        .id(jti.toString())
         .claim(TOKEN_TYPE_CLAIM, REFRESH_TOKEN_TYPE)
         .build();
     return jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
   }
 
   /**
-   * Validates a refresh token and extracts the user ID.
+   * Validates a refresh token's signature, expiration, and type claim.
    *
    * @param token the encoded refresh token
-   * @return the user ID from the token's subject claim
+   * @return the decoded JWT
    * @throws UnauthorizedApiException if the token is invalid, expired, or not a refresh token
    */
-  public UUID parseRefreshToken(String token) {
+  public Jwt decodeRefreshToken(String token) {
     Jwt jwt;
     try {
       jwt = jwtDecoder.decode(token);
-    } catch (JwtException e) {
+    } catch (JwtException _) {
       throw new UnauthorizedApiException("Invalid or expired refresh token");
     }
     String type = jwt.getClaimAsString(TOKEN_TYPE_CLAIM);
     if (!REFRESH_TOKEN_TYPE.equals(type)) {
       throw new UnauthorizedApiException("Expected refresh token but got '%s'".formatted(type == null ? "unknown" : type));
     }
-    return UUID.fromString(jwt.getSubject());
+    return jwt;
   }
 
   /**
@@ -102,14 +106,5 @@ public class TokenService {
    */
   public long getAccessTokenExpirationSeconds() {
     return accessTokenExpiration.toSeconds();
-  }
-
-  /**
-   * Returns the configured refresh token lifetime.
-   *
-   * @return refresh token expiration duration
-   */
-  public Duration getRefreshTokenExpiration() {
-    return refreshTokenExpiration;
   }
 }

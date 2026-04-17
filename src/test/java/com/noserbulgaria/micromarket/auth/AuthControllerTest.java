@@ -15,11 +15,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 
 import java.util.Objects;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -56,7 +58,7 @@ class AuthControllerTest {
 
   @Test
   void loginWithValidCredentials_returnsAccessTokenAndRefreshCookie() throws Exception {
-    mockMvc.perform(post("/auth/login")
+    ResultActions result = mockMvc.perform(post("/auth/login")
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"email": "user@micromarket.dev", "password": "user123"}
@@ -64,11 +66,8 @@ class AuthControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.accessToken").isNotEmpty())
         .andExpect(jsonPath("$.refreshToken").doesNotExist())
-        .andExpect(jsonPath("$.expiresIn").isNumber())
-        .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString(REFRESH_COOKIE_NAME + "=")))
-        .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("HttpOnly")))
-        .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("SameSite=Lax")))
-        .andExpect(header().string(HttpHeaders.SET_COOKIE, not(containsString("Secure"))));
+        .andExpect(jsonPath("$.expiresIn").isNumber());
+    assertRefreshCookieAttributes(result);
   }
 
   @Test
@@ -119,7 +118,7 @@ class AuthControllerTest {
 
   @Test
   void registerWithValidData_returns201AccessTokenAndRefreshCookie() throws Exception {
-    mockMvc.perform(post("/auth/register")
+    ResultActions result = mockMvc.perform(post("/auth/register")
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"email": "newuser@micromarket.dev", "password": "securepass123"}
@@ -127,8 +126,8 @@ class AuthControllerTest {
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.accessToken").isNotEmpty())
         .andExpect(jsonPath("$.refreshToken").doesNotExist())
-        .andExpect(jsonPath("$.expiresIn").isNumber())
-        .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString(REFRESH_COOKIE_NAME + "=")));
+        .andExpect(jsonPath("$.expiresIn").isNumber());
+    assertRefreshCookieAttributes(result);
   }
 
   @Test
@@ -179,23 +178,40 @@ class AuthControllerTest {
 
   @Test
   void refreshWithValidCookie_returnsNewAccessTokenAndRotatedRefreshCookie() throws Exception {
-    MvcResult loginResult = mockMvc.perform(post("/auth/login")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content("""
-                {"email": "user@micromarket.dev", "password": "user123"}
-                """))
-        .andExpect(status().isOk())
-        .andReturn();
+    String originalRefresh = loginAndCaptureRefreshToken();
 
-    String refreshToken = refreshTokenFrom(loginResult);
-
-    mockMvc.perform(post("/auth/refresh")
-            .cookie(new Cookie(REFRESH_COOKIE_NAME, refreshToken)))
+    ResultActions result = mockMvc.perform(post("/auth/refresh")
+            .cookie(new Cookie(REFRESH_COOKIE_NAME, originalRefresh)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.accessToken").isNotEmpty())
         .andExpect(jsonPath("$.refreshToken").doesNotExist())
-        .andExpect(jsonPath("$.expiresIn").isNumber())
-        .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString(REFRESH_COOKIE_NAME + "=")));
+        .andExpect(jsonPath("$.expiresIn").isNumber());
+    assertRefreshCookieAttributes(result);
+
+    String rotatedRefresh = refreshTokenFrom(result.andReturn());
+    assertNotEquals(originalRefresh, rotatedRefresh, "Refresh endpoint must rotate the cookie value");
+  }
+
+  @Test
+  void refreshWithReusedToken_revokesFamilyAndReturns401() throws Exception {
+    String originalRefresh = loginAndCaptureRefreshToken();
+
+    MvcResult firstRefresh = mockMvc.perform(post("/auth/refresh")
+            .cookie(new Cookie(REFRESH_COOKIE_NAME, originalRefresh)))
+        .andExpect(status().isOk())
+        .andReturn();
+    String rotatedRefresh = refreshTokenFrom(firstRefresh);
+
+    mockMvc.perform(post("/auth/refresh")
+            .cookie(new Cookie(REFRESH_COOKIE_NAME, originalRefresh)))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.title").value("Unauthorized"))
+        .andExpect(jsonPath("$.detail").value("Invalid or expired refresh token"));
+
+    mockMvc.perform(post("/auth/refresh")
+            .cookie(new Cookie(REFRESH_COOKIE_NAME, rotatedRefresh)))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.detail").value("Invalid or expired refresh token"));
   }
 
   @Test
@@ -220,25 +236,50 @@ class AuthControllerTest {
   }
 
   @Test
-  void logout_clearsRefreshCookie() throws Exception {
+  void logoutWithoutCookie_clearsRefreshCookie() throws Exception {
     mockMvc.perform(post("/auth/logout"))
         .andExpect(status().isNoContent())
         .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString(REFRESH_COOKIE_NAME + "=")))
         .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Max-Age=0")));
   }
 
+  @Test
+  void logoutWithValidCookie_revokesFamily() throws Exception {
+    String originalRefresh = loginAndCaptureRefreshToken();
+
+    mockMvc.perform(post("/auth/logout")
+            .cookie(new Cookie(REFRESH_COOKIE_NAME, originalRefresh)))
+        .andExpect(status().isNoContent())
+        .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Max-Age=0")));
+
+    mockMvc.perform(post("/auth/refresh")
+            .cookie(new Cookie(REFRESH_COOKIE_NAME, originalRefresh)))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.detail").value("Invalid or expired refresh token"));
+  }
+
+  private void assertRefreshCookieAttributes(ResultActions actions) throws Exception {
+    actions
+        .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString(REFRESH_COOKIE_NAME + "=")))
+        .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("HttpOnly")))
+        .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("SameSite=Lax")))
+        .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Path=/api/v1/auth")))
+        .andExpect(header().string(HttpHeaders.SET_COOKIE, not(containsString("Secure"))));
+  }
+
+  private String loginAndCaptureRefreshToken() throws Exception {
+    MvcResult loginResult = mockMvc.perform(post("/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"email": "user@micromarket.dev", "password": "user123"}
+                """))
+        .andExpect(status().isOk())
+        .andReturn();
+    return refreshTokenFrom(loginResult);
+  }
+
   private String refreshTokenFrom(MvcResult result) {
-    String setCookieHeader = Objects.requireNonNull(result.getResponse().getHeader(HttpHeaders.SET_COOKIE));
-    String cookiePrefix = REFRESH_COOKIE_NAME + "=";
-    if (!setCookieHeader.startsWith(cookiePrefix)) {
-      throw new IllegalStateException("Missing refresh cookie in response");
-    }
-
-    int cookieValueEnd = setCookieHeader.indexOf(';');
-    if (cookieValueEnd < 0) {
-      return setCookieHeader.substring(cookiePrefix.length());
-    }
-
-    return setCookieHeader.substring(cookiePrefix.length(), cookieValueEnd);
+    Cookie cookie = result.getResponse().getCookie(REFRESH_COOKIE_NAME);
+    return Objects.requireNonNull(cookie, "Missing refresh cookie in response").getValue();
   }
 }

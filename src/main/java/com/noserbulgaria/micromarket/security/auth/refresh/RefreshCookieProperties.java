@@ -1,4 +1,4 @@
-package com.noserbulgaria.micromarket.security.auth;
+package com.noserbulgaria.micromarket.security.auth.refresh;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -14,5 +14,5 @@ public class RefreshCookieProperties {
   private String name = "refresh_token";
   private String path = "/api/v1/auth";
   private String sameSite = "Lax";
-  private boolean secure = false;
+  private boolean secure = true;
 }
