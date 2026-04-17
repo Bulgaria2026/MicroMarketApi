@@ -1,4 +1,4 @@
-package com.noserbulgaria.micromarket.auth;
+package com.noserbulgaria.micromarket.security.auth.auth;
 
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
