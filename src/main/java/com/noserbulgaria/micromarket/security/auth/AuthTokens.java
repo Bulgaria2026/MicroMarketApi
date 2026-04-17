@@ -1,6 +1,6 @@
 package com.noserbulgaria.micromarket.security.auth;
 
-record AuthTokens(
+public record AuthTokens(
 
     String accessToken,
 
