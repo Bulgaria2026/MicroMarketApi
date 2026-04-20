@@ -134,6 +134,23 @@ class AuthControllerTest {
   }
 
   @Test
+  void loginWithInactiveUser_returns401AndDoesNotIssueTokens() throws Exception {
+    deactivateTestUser();
+
+    mockMvc.perform(post("/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"email": "user@micromarket.dev", "password": "user123"}
+                """))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.title").value("Unauthorized"))
+        .andExpect(jsonPath("$.status").value(401))
+        .andExpect(jsonPath("$.detail").value("Authentication is required to access '/auth/login'."))
+        .andExpect(jsonPath("$.instance").value("/auth/login"))
+        .andExpect(jsonPath("$.accessToken").doesNotExist());
+  }
+
+  @Test
   void loginWithBlankEmail_returns400() throws Exception {
     mockMvc.perform(post("/auth/login")
             .contentType(MediaType.APPLICATION_JSON)
@@ -232,6 +249,21 @@ class AuthControllerTest {
   }
 
   @Test
+  void refreshWithDeactivatedUser_returns401() throws Exception {
+    String originalRefresh = loginAndCaptureRefreshToken();
+    deactivateTestUser();
+
+    mockMvc.perform(post("/auth/refresh")
+            .cookie(new Cookie(REFRESH_COOKIE_NAME, originalRefresh)))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.title").value("Unauthorized"))
+        .andExpect(jsonPath("$.status").value(401))
+        .andExpect(jsonPath("$.detail").value("Invalid or expired refresh token"))
+        .andExpect(jsonPath("$.instance").value("/auth/refresh"))
+        .andExpect(jsonPath("$.accessToken").doesNotExist());
+  }
+
+  @Test
   void refreshWithReusedToken_revokesFamilyAndReturns401() throws Exception {
     String originalRefresh = loginAndCaptureRefreshToken();
 
@@ -320,5 +352,11 @@ class AuthControllerTest {
   private String refreshTokenFrom(MvcResult result) {
     Cookie cookie = result.getResponse().getCookie(REFRESH_COOKIE_NAME);
     return Objects.requireNonNull(cookie, "Missing refresh cookie in response").getValue();
+  }
+
+  private void deactivateTestUser() {
+    User user = userRepository.findByEmail("user@micromarket.dev").orElseThrow();
+    user.setStatus(AccountStatus.INACTIVE);
+    userRepository.saveAndFlush(user);
   }
 }
