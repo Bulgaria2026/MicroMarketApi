@@ -152,7 +152,7 @@ class UserControllerTest {
                 """))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.title").value("Request Binding Failed"))
-        .andExpect(jsonPath("$.detail").value("Invalid value for 'status'. Allowed values: [ACTIVE, DELETED, INACTIVE]"))
+        .andExpect(jsonPath("$.detail").value("Invalid value for 'status'. Allowed values: [ACTIVE, INACTIVE]"))
         .andExpect(jsonPath("$.instance").value("/user/" + userToUpdate.getId()));
   }
 

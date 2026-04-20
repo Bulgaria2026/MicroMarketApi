@@ -1,9 +1,8 @@
 package com.noserbulgaria.micromarket.security.user;
 
-import com.noserbulgaria.micromarket.domain.profile.Profile;
-import com.noserbulgaria.micromarket.domain.profile.dto.ProfileResponseDto;
 import com.noserbulgaria.micromarket.exception.ConflictApiException;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
+import com.noserbulgaria.micromarket.security.auth.refresh.RefreshTokenService;
 import com.noserbulgaria.micromarket.security.user.dto.UserMapper;
 import com.noserbulgaria.micromarket.security.user.dto.UserPatchRequestDto;
 import com.noserbulgaria.micromarket.security.user.dto.UserResponseDto;
@@ -21,6 +20,7 @@ public class UserService {
 
   private final UserRepository userRepository;
   private final UserMapper userMapper;
+  private final RefreshTokenService refreshTokenService;
 
   @Transactional(readOnly = true)
   public Page<UserResponseDto> findAll(UserFilter filter, Pageable pageable) {
@@ -30,8 +30,7 @@ public class UserService {
 
   @Transactional(readOnly = true)
   public UserResponseDto getByIdOrThrow(UUID id) {
-    return userMapper.toDto( userRepository.findById(id)
-        .orElseThrow((() -> new NotFoundApiException("User with id '%s' not found".formatted(id)))));
+    return userMapper.toDto(findUserByIdOrThrow(id));
   }
 
   @Transactional
@@ -50,6 +49,9 @@ public class UserService {
     }
 
     if (dto.status() != null) {
+      if (dto.status() == AccountStatus.INACTIVE && user.getStatus() != AccountStatus.INACTIVE) {
+        refreshTokenService.revokeAllForUser(user.getId());
+      }
       user.setStatus(dto.status());
     }
 

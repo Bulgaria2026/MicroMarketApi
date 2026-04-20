@@ -29,6 +29,11 @@ public record CustomUserDetails(User user) implements UserDetails {
     return user.getEmail();
   }
 
+  @Override
+  public boolean isEnabled() {
+    return user.getStatus() == AccountStatus.ACTIVE;
+  }
+
   public Role getRole() {
     return user.getRole();
   }

@@ -18,6 +18,7 @@ import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -99,6 +100,9 @@ public class SecurityConfig {
         throw new UnauthorizedApiException("JWT token is missing the email claim");
       }
       CustomUserDetails principal = userDetailsService.loadUserByUsername(email);
+      if (!principal.isEnabled()) {
+        throw new DisabledException("User account is inactive");
+      }
       return new UsernamePasswordAuthenticationToken(
           principal, jwt, authoritiesConverter.convert(jwt));
     };
