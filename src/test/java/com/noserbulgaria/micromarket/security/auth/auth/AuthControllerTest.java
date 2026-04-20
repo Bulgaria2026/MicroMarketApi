@@ -4,6 +4,8 @@ import com.noserbulgaria.micromarket.domain.customer.Customer;
 import com.noserbulgaria.micromarket.domain.order.OrderRepository;
 import com.noserbulgaria.micromarket.domain.profile.Profile;
 import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
+import com.noserbulgaria.micromarket.security.auth.refresh.RefreshTokenRepository;
+import com.noserbulgaria.micromarket.security.user.AccountStatus;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
 import com.noserbulgaria.micromarket.security.user.UserRepository;
@@ -15,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -53,25 +56,41 @@ class AuthControllerTest {
   @Autowired
   private PasswordEncoder passwordEncoder;
 
+  @Autowired
+  private RefreshTokenRepository refreshTokenRepository;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
   private Profile testProfile;
 
   @BeforeEach
   void setUp() {
-    orderRepository.deleteAll();
-    profileRepository.deleteAll();
-    userRepository.deleteAll();
+    cleanDatabase();
 
     User user = new User();
     user.setCustomer(new Customer());
     user.setEmail("user@micromarket.dev");
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode("user123")));
     user.setRole(Role.USER);
+    user.setStatus(AccountStatus.ACTIVE);
     user = userRepository.save(user);
 
     Profile profile = new Profile();
     profile.setUser(user);
     profile.setPoints(0);
     testProfile = profileRepository.save(profile);
+  }
+
+  private void cleanDatabase() {
+    jdbcTemplate.update("DELETE FROM refresh_tokens");
+    jdbcTemplate.update("DELETE FROM order_item");
+    jdbcTemplate.update("DELETE FROM orders");
+    jdbcTemplate.update("DELETE FROM profile");
+    jdbcTemplate.update("DELETE FROM guests");
+    jdbcTemplate.update("DELETE FROM users");
+    jdbcTemplate.update("DELETE FROM customer");
+    jdbcTemplate.update("DELETE FROM product");
   }
 
   // --- Login tests ---
@@ -86,8 +105,7 @@ class AuthControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.accessToken").isNotEmpty())
         .andExpect(jsonPath("$.refreshToken").doesNotExist())
-        .andExpect(jsonPath("$.expiresIn").isNumber())
-        .andExpect(jsonPath("$.profileId").value(testProfile.getId().toString()));
+        .andExpect(jsonPath("$.expiresIn").isNumber());
     assertRefreshCookieAttributes(result);
   }
 
@@ -147,8 +165,7 @@ class AuthControllerTest {
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.accessToken").isNotEmpty())
         .andExpect(jsonPath("$.refreshToken").doesNotExist())
-        .andExpect(jsonPath("$.expiresIn").isNumber())
-        .andExpect(jsonPath("$.profileId").isNotEmpty());
+        .andExpect(jsonPath("$.expiresIn").isNumber());
     assertRefreshCookieAttributes(result);
   }
 
@@ -207,8 +224,7 @@ class AuthControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.accessToken").isNotEmpty())
         .andExpect(jsonPath("$.refreshToken").doesNotExist())
-        .andExpect(jsonPath("$.expiresIn").isNumber())
-        .andExpect(jsonPath("$.profileId").value(testProfile.getId().toString()));
+        .andExpect(jsonPath("$.expiresIn").isNumber());
     assertRefreshCookieAttributes(result);
 
     String rotatedRefresh = refreshTokenFrom(result.andReturn());

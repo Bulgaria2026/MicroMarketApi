@@ -84,5 +84,4 @@ public class ProductController {
   ) {
     return productService.updateOrThrow(id, productDto);
   }
-
 }

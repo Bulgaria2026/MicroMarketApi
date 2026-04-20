@@ -13,6 +13,7 @@ import com.noserbulgaria.micromarket.security.auth.dto.LoginRequestDto;
 import com.noserbulgaria.micromarket.security.auth.dto.RegisterRequestDto;
 import com.noserbulgaria.micromarket.security.auth.refresh.RefreshTokenService;
 import com.noserbulgaria.micromarket.security.auth.refresh.RotationResult;
+import com.noserbulgaria.micromarket.security.user.AccountStatus;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
 import com.noserbulgaria.micromarket.security.user.UserRepository;
@@ -52,13 +53,14 @@ public class AuthService {
     user.setEmail(request.email());
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode(request.password())));
     user.setRole(Role.USER);
+    user.setStatus(AccountStatus.ACTIVE);
     user = userRepository.save(user);
     Customer registeredCustomer = user.getCustomer();
 
     Profile profile = new Profile();
     profile.setUser(user);
     profile.setPoints(0);
-    profile = profileRepository.save(profile);
+    profileRepository.save(profile);
 
     Optional<Guest> existingGuest = guestRepository.findByEmail(request.email());
     if (existingGuest.isPresent()) {
@@ -69,7 +71,7 @@ public class AuthService {
       guestRepository.delete(guest);
     }
 
-    return buildAuthTokens(user, refreshTokenService.issueForNewFamily(user), profile.getId());
+    return buildAuthTokens(user, refreshTokenService.issueForNewFamily(user));
   }
 
   @Transactional
@@ -79,27 +81,21 @@ public class AuthService {
 
     User user = userRepository.findByEmail(request.email())
         .orElseThrow(() -> new NotFoundApiException("User with email '%s' not found".formatted(request.email())));
-    return buildAuthTokens(user, refreshTokenService.issueForNewFamily(user), getRequiredProfileId(user));
+    return buildAuthTokens(user, refreshTokenService.issueForNewFamily(user));
   }
 
   public AuthTokens refresh(String rawRefreshToken) {
     RotationResult result = refreshTokenService.rotate(rawRefreshToken);
-    return buildAuthTokens(result.user(), result.newRawToken(), getRequiredProfileId(result.user()));
+    return buildAuthTokens(result.user(), result.newRawToken());
   }
 
   public void revokeFamilyFromToken(@Nullable String rawRefreshToken) {
     refreshTokenService.revokeFamilyOfToken(rawRefreshToken);
   }
 
-  private AuthTokens buildAuthTokens(User user, String refreshToken, java.util.UUID profileId) {
+  private AuthTokens buildAuthTokens(User user, String refreshToken) {
     String accessToken = tokenService.generateAccessToken(user);
     long expiresIn = tokenService.getAccessTokenExpirationSeconds();
-    return new AuthTokens(accessToken, refreshToken, expiresIn, profileId);
-  }
-
-  private java.util.UUID getRequiredProfileId(User user) {
-    return profileRepository.findByUser_Id(user.getId())
-        .map(Profile::getId)
-        .orElseThrow(() -> new IllegalStateException("Profile for user '%s' not found".formatted(user.getId())));
+    return new AuthTokens(accessToken, refreshToken, expiresIn);
   }
 }

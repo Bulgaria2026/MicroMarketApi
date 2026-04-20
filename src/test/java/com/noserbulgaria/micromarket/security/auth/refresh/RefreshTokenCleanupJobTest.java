@@ -3,6 +3,7 @@ package com.noserbulgaria.micromarket.security.auth.refresh;
 import com.noserbulgaria.micromarket.domain.customer.Customer;
 import com.noserbulgaria.micromarket.domain.order.OrderRepository;
 import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
+import com.noserbulgaria.micromarket.security.user.AccountStatus;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
 import com.noserbulgaria.micromarket.security.user.UserRepository;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -48,21 +50,33 @@ class RefreshTokenCleanupJobTest {
   @Autowired
   private PasswordEncoder passwordEncoder;
 
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
   private UUID userId;
 
   @BeforeEach
   void setUp() {
-    refreshTokenRepository.deleteAll();
-    orderRepository.deleteAll();
-    profileRepository.deleteAll();
-    userRepository.deleteAll();
+    cleanDatabase();
 
     User user = new User();
     user.setCustomer(new Customer());
     user.setEmail("cleanup@micromarket.dev");
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode("user123")));
     user.setRole(Role.USER);
+    user.setStatus(AccountStatus.ACTIVE);
     userId = userRepository.save(user).getId();
+  }
+
+  private void cleanDatabase() {
+    jdbcTemplate.update("DELETE FROM refresh_tokens");
+    jdbcTemplate.update("DELETE FROM order_item");
+    jdbcTemplate.update("DELETE FROM orders");
+    jdbcTemplate.update("DELETE FROM profile");
+    jdbcTemplate.update("DELETE FROM guests");
+    jdbcTemplate.update("DELETE FROM users");
+    jdbcTemplate.update("DELETE FROM customer");
+    jdbcTemplate.update("DELETE FROM product");
   }
 
   @Test

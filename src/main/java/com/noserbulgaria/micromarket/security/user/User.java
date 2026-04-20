@@ -33,4 +33,8 @@ public class User extends ExtendedEntity {
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
   private Role role;
+
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false)
+  private AccountStatus status = AccountStatus.ACTIVE;
 }

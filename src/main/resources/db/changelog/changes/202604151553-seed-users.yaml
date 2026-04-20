@@ -19,6 +19,9 @@ databaseChangeLog:
               - column:
                   name: role
                   value: "ADMINISTRATOR"
+              - column:
+                  name: status
+                  value: "ACTIVE"
         - insert:
             tableName: users
             columns:
@@ -34,3 +37,24 @@ databaseChangeLog:
               - column:
                   name: role
                   value: "USER"
+              - column:
+                  name: status
+                  value: "ACTIVE"
+        - insert:
+            tableName: users
+            columns:
+              - column:
+                  name: id
+                  value: "c0000000-0000-0000-0000-000000000001"
+              - column:
+                  name: email
+                  value: "inactive@micromarket.dev"
+              - column:
+                  name: password
+                  value: "{bcrypt}$2b$10$ac6H8aEDlCRYtJBuxl5it.odNpanHfeXcYmmJ8mpEJ77SwHSr0PkS" #user123
+              - column:
+                  name: role
+                  value: "USER"
+              - column:
+                  name: status
+                  value: "INACTIVE"

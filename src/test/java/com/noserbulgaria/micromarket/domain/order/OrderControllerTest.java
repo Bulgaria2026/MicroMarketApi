@@ -17,10 +17,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.noserbulgaria.micromarket.security.user.Role;
+import com.noserbulgaria.micromarket.security.user.AccountStatus;
 import com.noserbulgaria.micromarket.security.user.User;
 import com.noserbulgaria.micromarket.security.user.UserRepository;
 
@@ -44,6 +46,9 @@ class OrderControllerTest {
   @Autowired
   private ProfileRepository profileRepository;
 
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
   private User testUser;
 
   private Order testOrder;
@@ -52,16 +57,14 @@ class OrderControllerTest {
 
   @BeforeEach
   void setUp() {
-    orderRepository.deleteAll();
-    productRepository.deleteAll();
-    profileRepository.deleteAll();
-    userRepository.deleteAll();
+    cleanDatabase();
 
     testUser = new User();
     testUser.setCustomer(new Customer());
     testUser.setEmail("admin@test.local");
     testUser.setPassword("password");
     testUser.setRole(Role.ADMINISTRATOR);
+    testUser.setStatus(AccountStatus.ACTIVE);
     testUser = userRepository.saveAndFlush(testUser);
 
     testProduct = new Product();
@@ -85,6 +88,17 @@ class OrderControllerTest {
     testOrder.getOrderItems().add(item);
 
     testOrder = orderRepository.saveAndFlush(testOrder);
+  }
+
+  private void cleanDatabase() {
+    jdbcTemplate.update("DELETE FROM refresh_tokens");
+    jdbcTemplate.update("DELETE FROM order_item");
+    jdbcTemplate.update("DELETE FROM orders");
+    jdbcTemplate.update("DELETE FROM profile");
+    jdbcTemplate.update("DELETE FROM guests");
+    jdbcTemplate.update("DELETE FROM users");
+    jdbcTemplate.update("DELETE FROM customer");
+    jdbcTemplate.update("DELETE FROM product");
   }
 
   @Test

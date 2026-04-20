@@ -1,7 +1,7 @@
 databaseChangeLog:
   - changeSet:
       id: 202604201100-1
-      author: Codex
+      author: BambusTM
       changes:
         - createTable:
             tableName: customer

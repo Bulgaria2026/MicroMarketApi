@@ -25,13 +25,13 @@ public class ProfileService {
   }
 
   @Transactional(readOnly = true)
-  public Optional<Profile> getById(UUID id) {
-    return profileRepository.findById(id);
+  public ProfileResponseDto getByUserIdOrThrow(UUID userId) {
+    return profileMapper.toDto(profileRepository.findByUserId(userId)
+        .orElseThrow(() -> new NotFoundApiException("Profile with userId '%s' not found".formatted(userId))));
   }
 
   @Transactional(readOnly = true)
-  public Profile getByUserIdOrThrow(UUID userId) {
-    return profileRepository.findByUser_Id(userId)
-        .orElseThrow(() -> new IllegalStateException("Profile for user '%s' not found".formatted(userId)));
+  public Optional<Profile> getById(UUID id) {
+    return profileRepository.findById(id);
   }
 }

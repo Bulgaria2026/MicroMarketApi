@@ -3,6 +3,8 @@ package com.noserbulgaria.micromarket.domain.profile;
 import com.jayway.jsonpath.JsonPath;
 import com.noserbulgaria.micromarket.domain.customer.Customer;
 import com.noserbulgaria.micromarket.domain.order.OrderRepository;
+import com.noserbulgaria.micromarket.security.auth.refresh.RefreshTokenRepository;
+import com.noserbulgaria.micromarket.security.user.AccountStatus;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
 import com.noserbulgaria.micromarket.security.user.UserRepository;
@@ -12,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -47,6 +50,12 @@ class ProfileControllerTest {
   @Autowired
   private PasswordEncoder passwordEncoder;
 
+  @Autowired
+  private RefreshTokenRepository refreshTokenRepository;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
   private User adminUser;
   private User ownerUser;
   private User otherUser;
@@ -54,19 +63,28 @@ class ProfileControllerTest {
 
   @BeforeEach
   void setUp() {
-    orderRepository.deleteAll();
-    profileRepository.deleteAll();
-    userRepository.deleteAll();
+    cleanDatabase();
 
     adminUser = createUserWithProfile("admin@micromarket.dev", Role.ADMINISTRATOR);
     ownerUser = createUserWithProfile("owner@micromarket.dev", Role.USER);
     otherUser = createUserWithProfile("other@micromarket.dev", Role.USER);
-    ownerProfile = profileRepository.findByUser_Id(ownerUser.getId()).orElseThrow();
+    ownerProfile = profileRepository.findByUserId(ownerUser.getId()).orElseThrow();
+  }
+
+  private void cleanDatabase() {
+    jdbcTemplate.update("DELETE FROM refresh_tokens");
+    jdbcTemplate.update("DELETE FROM order_item");
+    jdbcTemplate.update("DELETE FROM orders");
+    jdbcTemplate.update("DELETE FROM profile");
+    jdbcTemplate.update("DELETE FROM guests");
+    jdbcTemplate.update("DELETE FROM users");
+    jdbcTemplate.update("DELETE FROM customer");
+    jdbcTemplate.update("DELETE FROM product");
   }
 
   @Test
   void getById_asOwner_returnsProfile() throws Exception {
-    mockMvc.perform(get("/profile/{id}", ownerProfile.getId())
+    mockMvc.perform(get("/profile/own")
             .header("Authorization", bearer(accessTokenFor(ownerUser.getEmail(), PASSWORD))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(ownerProfile.getId().toString()))
@@ -112,6 +130,7 @@ class ProfileControllerTest {
     user.setEmail(email);
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
     user.setRole(role);
+    user.setStatus(AccountStatus.ACTIVE);
     user = userRepository.saveAndFlush(user);
 
     Profile profile = new Profile();

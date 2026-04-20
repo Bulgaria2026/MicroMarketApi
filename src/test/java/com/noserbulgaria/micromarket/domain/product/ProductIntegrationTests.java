@@ -5,6 +5,8 @@ import com.noserbulgaria.micromarket.domain.customer.Customer;
 import com.noserbulgaria.micromarket.domain.order.OrderRepository;
 import com.noserbulgaria.micromarket.domain.profile.Profile;
 import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
+import com.noserbulgaria.micromarket.security.auth.refresh.RefreshTokenRepository;
+import com.noserbulgaria.micromarket.security.user.AccountStatus;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
 import com.noserbulgaria.micromarket.security.user.UserRepository;
@@ -15,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -57,15 +60,29 @@ class ProductIntegrationTests {
   @Autowired
   private PasswordEncoder passwordEncoder;
 
+  @Autowired
+  private RefreshTokenRepository refreshTokenRepository;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
   @BeforeEach
   void setUp() {
-    orderRepository.deleteAll();
-    productRepository.deleteAll();
-    profileRepository.deleteAll();
-    userRepository.deleteAll();
+    cleanDatabase();
 
     createUser(ADMIN_EMAIL, Role.ADMINISTRATOR);
     createUser(USER_EMAIL, Role.USER);
+  }
+
+  private void cleanDatabase() {
+    jdbcTemplate.update("DELETE FROM refresh_tokens");
+    jdbcTemplate.update("DELETE FROM order_item");
+    jdbcTemplate.update("DELETE FROM orders");
+    jdbcTemplate.update("DELETE FROM profile");
+    jdbcTemplate.update("DELETE FROM guests");
+    jdbcTemplate.update("DELETE FROM users");
+    jdbcTemplate.update("DELETE FROM customer");
+    jdbcTemplate.update("DELETE FROM product");
   }
 
   //region Public API Tests
@@ -448,6 +465,7 @@ class ProductIntegrationTests {
     user.setEmail(email);
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
     user.setRole(role);
+    user.setStatus(AccountStatus.ACTIVE);
     user = userRepository.saveAndFlush(user);
 
     Profile profile = new Profile();
