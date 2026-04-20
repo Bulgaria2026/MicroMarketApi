@@ -46,6 +46,7 @@ public class UserController {
   @Operation(summary = "Get users by ID")
   @ApiResponse(responseCode = "200", description = "User found")
   @ApiResponse(responseCode = "401", description = "Authentication required to access a user")
+  @ApiResponse(responseCode = "403", description = "Access denied to the user")
   @ApiResponse(responseCode = "404", description = "User not found")
   @GetMapping("/{id}")
   @PreAuthorize("hasRole('ADMINISTRATOR')")

@@ -28,6 +28,7 @@ public class ProfileController {
   @Operation(summary = "Get profile by ID")
   @ApiResponse(responseCode = "200", description = "Profile found")
   @ApiResponse(responseCode = "401", description = "Authentication required to access a profile")
+  @ApiResponse(responseCode = "403", description = "Access denied to the profile")
   @ApiResponse(responseCode = "404", description = "Profile not found")
   @GetMapping("/{id}")
   @PreAuthorize("hasRole('ADMINISTRATOR')")
