@@ -1,5 +1,8 @@
 package com.noserbulgaria.micromarket.security.auth.refresh;
 
+import com.noserbulgaria.micromarket.domain.customer.Customer;
+import com.noserbulgaria.micromarket.domain.order.OrderRepository;
+import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
 import com.noserbulgaria.micromarket.security.user.UserRepository;
@@ -37,6 +40,12 @@ class RefreshTokenCleanupJobTest {
   private UserRepository userRepository;
 
   @Autowired
+  private OrderRepository orderRepository;
+
+  @Autowired
+  private ProfileRepository profileRepository;
+
+  @Autowired
   private PasswordEncoder passwordEncoder;
 
   private UUID userId;
@@ -44,9 +53,12 @@ class RefreshTokenCleanupJobTest {
   @BeforeEach
   void setUp() {
     refreshTokenRepository.deleteAll();
+    orderRepository.deleteAll();
+    profileRepository.deleteAll();
     userRepository.deleteAll();
 
     User user = new User();
+    user.setCustomer(new Customer());
     user.setEmail("cleanup@micromarket.dev");
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode("user123")));
     user.setRole(Role.USER);

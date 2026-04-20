@@ -1,0 +1,119 @@
+databaseChangeLog:
+  - changeSet:
+      id: 202604201100-1
+      author: Codex
+      changes:
+        - createTable:
+            tableName: customer
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp
+        - sql:
+            sql: |
+              INSERT INTO customer (id, created_at, updated_at)
+              SELECT users.id, users.created_at, users.updated_at
+              FROM users;
+        - addColumn:
+            tableName: users
+            columns:
+              - column:
+                  name: customer_id
+                  type: uuid
+        - sql:
+            sql: |
+              UPDATE users
+              SET customer_id = id
+              WHERE customer_id IS NULL;
+        - addNotNullConstraint:
+            tableName: users
+            columnName: customer_id
+            columnDataType: uuid
+        - addUniqueConstraint:
+            tableName: users
+            columnNames: customer_id
+            constraintName: uk_users_customer_id
+        - addForeignKeyConstraint:
+            baseTableName: users
+            baseColumnNames: customer_id
+            referencedTableName: customer
+            referencedColumnNames: id
+            constraintName: fk_users_customer
+        - createTable:
+            tableName: guests
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: email
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+                    unique: true
+        - addForeignKeyConstraint:
+            baseTableName: guests
+            baseColumnNames: id
+            referencedTableName: customer
+            referencedColumnNames: id
+            constraintName: fk_guests_customer_id
+        - createTable:
+            tableName: profile
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+              - column:
+                  name: points
+                  type: bigint
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: |
+              INSERT INTO profile (id, user_id, points)
+              SELECT users.id, users.id, 0
+              FROM users;
+        - addForeignKeyConstraint:
+            baseTableName: profile
+            baseColumnNames: id
+            referencedTableName: customer
+            referencedColumnNames: id
+            constraintName: fk_profile_customer_id
+        - addUniqueConstraint:
+            tableName: profile
+            columnNames: user_id
+            constraintName: uk_profile_user_id
+        - addForeignKeyConstraint:
+            baseTableName: profile
+            baseColumnNames: user_id
+            referencedTableName: users
+            referencedColumnNames: id
+            constraintName: fk_profile_user
+        - addForeignKeyConstraint:
+            baseTableName: orders
+            baseColumnNames: customer_id
+            referencedTableName: customer
+            referencedColumnNames: id
+            constraintName: fk_orders_customer

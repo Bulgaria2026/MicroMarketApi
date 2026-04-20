@@ -1,5 +1,9 @@
 package com.noserbulgaria.micromarket.security.auth.auth;
 
+import com.noserbulgaria.micromarket.domain.customer.Customer;
+import com.noserbulgaria.micromarket.domain.order.OrderRepository;
+import com.noserbulgaria.micromarket.domain.profile.Profile;
+import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
 import com.noserbulgaria.micromarket.security.user.UserRepository;
@@ -41,17 +45,33 @@ class AuthControllerTest {
   private UserRepository userRepository;
 
   @Autowired
+  private ProfileRepository profileRepository;
+
+  @Autowired
+  private OrderRepository orderRepository;
+
+  @Autowired
   private PasswordEncoder passwordEncoder;
+
+  private Profile testProfile;
 
   @BeforeEach
   void setUp() {
+    orderRepository.deleteAll();
+    profileRepository.deleteAll();
     userRepository.deleteAll();
 
     User user = new User();
+    user.setCustomer(new Customer());
     user.setEmail("user@micromarket.dev");
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode("user123")));
     user.setRole(Role.USER);
-    userRepository.save(user);
+    user = userRepository.save(user);
+
+    Profile profile = new Profile();
+    profile.setUser(user);
+    profile.setPoints(0);
+    testProfile = profileRepository.save(profile);
   }
 
   // --- Login tests ---
@@ -66,7 +86,8 @@ class AuthControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.accessToken").isNotEmpty())
         .andExpect(jsonPath("$.refreshToken").doesNotExist())
-        .andExpect(jsonPath("$.expiresIn").isNumber());
+        .andExpect(jsonPath("$.expiresIn").isNumber())
+        .andExpect(jsonPath("$.profileId").value(testProfile.getId().toString()));
     assertRefreshCookieAttributes(result);
   }
 
@@ -126,7 +147,8 @@ class AuthControllerTest {
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.accessToken").isNotEmpty())
         .andExpect(jsonPath("$.refreshToken").doesNotExist())
-        .andExpect(jsonPath("$.expiresIn").isNumber());
+        .andExpect(jsonPath("$.expiresIn").isNumber())
+        .andExpect(jsonPath("$.profileId").isNotEmpty());
     assertRefreshCookieAttributes(result);
   }
 
@@ -185,7 +207,8 @@ class AuthControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.accessToken").isNotEmpty())
         .andExpect(jsonPath("$.refreshToken").doesNotExist())
-        .andExpect(jsonPath("$.expiresIn").isNumber());
+        .andExpect(jsonPath("$.expiresIn").isNumber())
+        .andExpect(jsonPath("$.profileId").value(testProfile.getId().toString()));
     assertRefreshCookieAttributes(result);
 
     String rotatedRefresh = refreshTokenFrom(result.andReturn());

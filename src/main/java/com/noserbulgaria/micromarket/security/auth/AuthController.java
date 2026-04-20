@@ -38,7 +38,7 @@ public class AuthController {
     AuthTokens authTokens = authService.register(request);
     return ResponseEntity.status(HttpStatus.CREATED)
         .header(HttpHeaders.SET_COOKIE, refreshCookieService.createRefreshTokenCookie(authTokens.refreshToken()).toString())
-        .body(new AuthResponseDto(authTokens.accessToken(), authTokens.expiresIn()));
+        .body(new AuthResponseDto(authTokens.accessToken(), authTokens.expiresIn(), authTokens.profileId()));
   }
 
   @Operation(summary = "Authenticate with email and password")
@@ -51,7 +51,7 @@ public class AuthController {
     AuthTokens authTokens = authService.login(request);
     return ResponseEntity.ok()
         .header(HttpHeaders.SET_COOKIE, refreshCookieService.createRefreshTokenCookie(authTokens.refreshToken()).toString())
-        .body(new AuthResponseDto(authTokens.accessToken(), authTokens.expiresIn()));
+        .body(new AuthResponseDto(authTokens.accessToken(), authTokens.expiresIn(), authTokens.profileId()));
   }
 
   @Operation(summary = "Refresh an expired access token")
@@ -71,7 +71,7 @@ public class AuthController {
     AuthTokens authTokens = authService.refresh(refreshToken);
     return ResponseEntity.ok()
         .header(HttpHeaders.SET_COOKIE, refreshCookieService.createRefreshTokenCookie(authTokens.refreshToken()).toString())
-        .body(new AuthResponseDto(authTokens.accessToken(), authTokens.expiresIn()));
+        .body(new AuthResponseDto(authTokens.accessToken(), authTokens.expiresIn(), authTokens.profileId()));
   }
 
   @Operation(summary = "Revoke the current refresh token family and clear the cookie")

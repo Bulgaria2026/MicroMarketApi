@@ -1,5 +1,12 @@
 package com.noserbulgaria.micromarket.security.auth;
 
+import com.noserbulgaria.micromarket.domain.customer.Customer;
+import com.noserbulgaria.micromarket.domain.guest.Guest;
+import com.noserbulgaria.micromarket.domain.guest.GuestRepository;
+import com.noserbulgaria.micromarket.domain.order.Order;
+import com.noserbulgaria.micromarket.domain.order.OrderRepository;
+import com.noserbulgaria.micromarket.domain.profile.Profile;
+import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
 import com.noserbulgaria.micromarket.exception.ConflictApiException;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
 import com.noserbulgaria.micromarket.security.auth.dto.LoginRequestDto;
@@ -18,6 +25,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +37,9 @@ public class AuthService {
   private final TokenService tokenService;
   private final RefreshTokenService refreshTokenService;
   private final PasswordEncoder passwordEncoder;
+  private final GuestRepository guestRepository;
+  private final OrderRepository orderRepository;
+  private final ProfileRepository profileRepository;
 
   @Transactional
   public AuthTokens register(RegisterRequestDto request) {
@@ -36,12 +48,28 @@ public class AuthService {
     }
 
     User user = new User();
+    user.setCustomer(new Customer());
     user.setEmail(request.email());
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode(request.password())));
     user.setRole(Role.USER);
     user = userRepository.save(user);
+    Customer registeredCustomer = user.getCustomer();
 
-    return buildAuthTokens(user, refreshTokenService.issueForNewFamily(user));
+    Profile profile = new Profile();
+    profile.setUser(user);
+    profile.setPoints(0);
+    profile = profileRepository.save(profile);
+
+    Optional<Guest> existingGuest = guestRepository.findByEmail(request.email());
+    if (existingGuest.isPresent()) {
+      Guest guest = existingGuest.get();
+      Set<Order> guestOrders = guest.getOrders();
+      guestOrders.forEach(order -> order.setCustomer(registeredCustomer));
+      orderRepository.saveAll(guestOrders);
+      guestRepository.delete(guest);
+    }
+
+    return buildAuthTokens(user, refreshTokenService.issueForNewFamily(user), profile.getId());
   }
 
   @Transactional
@@ -51,21 +79,27 @@ public class AuthService {
 
     User user = userRepository.findByEmail(request.email())
         .orElseThrow(() -> new NotFoundApiException("User with email '%s' not found".formatted(request.email())));
-    return buildAuthTokens(user, refreshTokenService.issueForNewFamily(user));
+    return buildAuthTokens(user, refreshTokenService.issueForNewFamily(user), getRequiredProfileId(user));
   }
 
   public AuthTokens refresh(String rawRefreshToken) {
     RotationResult result = refreshTokenService.rotate(rawRefreshToken);
-    return buildAuthTokens(result.user(), result.newRawToken());
+    return buildAuthTokens(result.user(), result.newRawToken(), getRequiredProfileId(result.user()));
   }
 
   public void revokeFamilyFromToken(@Nullable String rawRefreshToken) {
     refreshTokenService.revokeFamilyOfToken(rawRefreshToken);
   }
 
-  private AuthTokens buildAuthTokens(User user, String refreshToken) {
+  private AuthTokens buildAuthTokens(User user, String refreshToken, java.util.UUID profileId) {
     String accessToken = tokenService.generateAccessToken(user);
     long expiresIn = tokenService.getAccessTokenExpirationSeconds();
-    return new AuthTokens(accessToken, refreshToken, expiresIn);
+    return new AuthTokens(accessToken, refreshToken, expiresIn, profileId);
+  }
+
+  private java.util.UUID getRequiredProfileId(User user) {
+    return profileRepository.findByUser_Id(user.getId())
+        .map(Profile::getId)
+        .orElseThrow(() -> new IllegalStateException("Profile for user '%s' not found".formatted(user.getId())));
   }
 }

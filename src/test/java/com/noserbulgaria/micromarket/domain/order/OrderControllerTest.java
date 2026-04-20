@@ -7,8 +7,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.math.BigDecimal;
 import java.util.UUID;
 
+import com.noserbulgaria.micromarket.domain.customer.Customer;
 import com.noserbulgaria.micromarket.domain.product.Product;
 import com.noserbulgaria.micromarket.domain.product.ProductRepository;
+import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +41,9 @@ class OrderControllerTest {
   @Autowired
   private ProductRepository productRepository;
 
+  @Autowired
+  private ProfileRepository profileRepository;
+
   private User testUser;
 
   private Order testOrder;
@@ -49,9 +54,11 @@ class OrderControllerTest {
   void setUp() {
     orderRepository.deleteAll();
     productRepository.deleteAll();
+    profileRepository.deleteAll();
     userRepository.deleteAll();
 
     testUser = new User();
+    testUser.setCustomer(new Customer());
     testUser.setEmail("admin@test.local");
     testUser.setPassword("password");
     testUser.setRole(Role.ADMINISTRATOR);
@@ -68,7 +75,7 @@ class OrderControllerTest {
 
     testOrder = new Order();
     testOrder.setStatus(OrderStatusType.PENDING);
-    testOrder.setCustomerId(testUser.getId());
+    testOrder.setCustomer(testUser.getCustomer());
 
     OrderItem item = new OrderItem();
     item.setOrder(testOrder);
@@ -123,7 +130,7 @@ class OrderControllerTest {
   void getOrdersAsAdministrator_withStatusFilter_returnsFiltered() throws Exception {
     Order filteredOut = new Order();
     filteredOut.setStatus(OrderStatusType.COMPLETED);
-    filteredOut.setCustomerId(testUser.getId());
+    filteredOut.setCustomer(testUser.getCustomer());
     orderRepository.saveAndFlush(filteredOut);
 
     mockMvc.perform(get("/order").param("status", OrderStatusType.PENDING.name()))

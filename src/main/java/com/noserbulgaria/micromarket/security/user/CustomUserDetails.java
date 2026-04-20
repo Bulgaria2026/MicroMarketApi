@@ -6,6 +6,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Adapts the {@link User} entity to Spring Security's {@link UserDetails} contract, mapping the user's {@link Role} to
@@ -30,5 +31,9 @@ public record CustomUserDetails(User user) implements UserDetails {
 
   public Role getRole() {
     return user.getRole();
+  }
+
+  public UUID getId() {
+    return user.getId();
   }
 }

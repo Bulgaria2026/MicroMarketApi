@@ -1,7 +1,10 @@
 package com.noserbulgaria.micromarket.domain.product;
 
 import com.jayway.jsonpath.JsonPath;
+import com.noserbulgaria.micromarket.domain.customer.Customer;
 import com.noserbulgaria.micromarket.domain.order.OrderRepository;
+import com.noserbulgaria.micromarket.domain.profile.Profile;
+import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
 import com.noserbulgaria.micromarket.security.user.UserRepository;
@@ -49,16 +52,20 @@ class ProductIntegrationTests {
   private OrderRepository orderRepository;
 
   @Autowired
+  private ProfileRepository profileRepository;
+
+  @Autowired
   private PasswordEncoder passwordEncoder;
 
   @BeforeEach
   void setUp() {
     orderRepository.deleteAll();
     productRepository.deleteAll();
+    profileRepository.deleteAll();
     userRepository.deleteAll();
 
-    userRepository.save(createUser(ADMIN_EMAIL, Role.ADMINISTRATOR));
-    userRepository.save(createUser(USER_EMAIL, Role.USER));
+    createUser(ADMIN_EMAIL, Role.ADMINISTRATOR);
+    createUser(USER_EMAIL, Role.USER);
   }
 
   //region Public API Tests
@@ -437,9 +444,16 @@ class ProductIntegrationTests {
 
   private User createUser(String email, Role role) {
     User user = new User();
+    user.setCustomer(new Customer());
     user.setEmail(email);
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
     user.setRole(role);
+    user = userRepository.saveAndFlush(user);
+
+    Profile profile = new Profile();
+    profile.setUser(user);
+    profile.setPoints(0);
+    profileRepository.saveAndFlush(profile);
     return user;
   }
 
