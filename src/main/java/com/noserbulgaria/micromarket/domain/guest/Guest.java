@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @Entity
-@Table(name = "guests")
+@Table(name = "guest")
 @EqualsAndHashCode(callSuper = true)
 @SuppressWarnings("NullAway.Init")
 public class Guest extends Customer {
