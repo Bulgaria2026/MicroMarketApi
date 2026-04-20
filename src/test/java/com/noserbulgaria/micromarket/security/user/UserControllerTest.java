@@ -1,0 +1,235 @@
+package com.noserbulgaria.micromarket.security.user;
+
+import com.jayway.jsonpath.JsonPath;
+import com.noserbulgaria.micromarket.domain.customer.Customer;
+import com.noserbulgaria.micromarket.domain.order.OrderRepository;
+import com.noserbulgaria.micromarket.domain.profile.Profile;
+import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
+import com.noserbulgaria.micromarket.security.auth.refresh.RefreshTokenRepository;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+import java.util.Objects;
+import java.util.UUID;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+class UserControllerTest {
+
+  private static final String PASSWORD = "user12345";
+
+  @Autowired
+  private MockMvc mockMvc;
+
+  @Autowired
+  private UserRepository userRepository;
+
+  @Autowired
+  private ProfileRepository profileRepository;
+
+  @Autowired
+  private OrderRepository orderRepository;
+
+  @Autowired
+  private PasswordEncoder passwordEncoder;
+
+  @Autowired
+  private RefreshTokenRepository refreshTokenRepository;
+
+  private User adminUser;
+  private User userToUpdate;
+
+  @BeforeEach
+  void setUp() {
+    adminUser = createUserWithProfile(uniqueEmail("admin"), Role.ADMINISTRATOR);
+    userToUpdate = createUserWithProfile(uniqueEmail("user"), Role.USER);
+  }
+
+  @Test
+  void patchUser_withValidRole_updatesRole() throws Exception {
+    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"role": "ADMINISTRATOR"}
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.role").value("ADMINISTRATOR"))
+        .andExpect(jsonPath("$.email").value(userToUpdate.getEmail()))
+        .andExpect(jsonPath("$.status").value(AccountStatus.ACTIVE.name()));
+
+    User updatedUser = userRepository.findById(userToUpdate.getId()).orElseThrow();
+    Assertions.assertEquals(Role.ADMINISTRATOR, updatedUser.getRole());
+  }
+
+  @Test
+  void patchUser_withValidEmail_updatesEmail() throws Exception {
+    String newEmail = uniqueEmail("updated");
+
+    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"email": "%s"}
+                """.formatted(newEmail)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.email").value(newEmail))
+        .andExpect(jsonPath("$.role").value(userToUpdate.getRole().name()))
+        .andExpect(jsonPath("$.status").value(AccountStatus.ACTIVE.name()));
+
+    User updatedUser = userRepository.findById(userToUpdate.getId()).orElseThrow();
+    Assertions.assertEquals(newEmail, updatedUser.getEmail());
+  }
+
+  @Test
+  void patchUser_withValidStatus_updatesStatus() throws Exception {
+    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"status": "INACTIVE"}
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value(AccountStatus.INACTIVE.name()))
+        .andExpect(jsonPath("$.email").value(userToUpdate.getEmail()))
+        .andExpect(jsonPath("$.role").value(userToUpdate.getRole().name()));
+
+    User updatedUser = userRepository.findById(userToUpdate.getId()).orElseThrow();
+    Assertions.assertEquals(AccountStatus.INACTIVE, updatedUser.getStatus());
+  }
+
+  @Test
+  void patchUser_withDuplicateEmail_returnsConflict() throws Exception {
+    User existingUser = createUserWithProfile(uniqueEmail("existing"), Role.USER);
+
+    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"email": "%s"}
+                """.formatted(existingUser.getEmail())))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.title").value("Conflict"))
+        .andExpect(jsonPath("$.detail").value("User with email '%s' already exists".formatted(existingUser.getEmail())));
+  }
+
+  @Test
+  void patchUser_withInvalidRole_returnsBadRequest() throws Exception {
+    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"role": "INVALID"}
+                """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.title").value("Request Binding Failed"))
+        .andExpect(jsonPath("$.detail").value("Invalid value for 'role'. Allowed values: [ADMINISTRATOR, USER]"))
+        .andExpect(jsonPath("$.instance").value("/user/" + userToUpdate.getId()));
+  }
+
+  @Test
+  void patchUser_withInvalidStatus_returnsBadRequest() throws Exception {
+    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"status": "WRONG"}
+                """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.title").value("Request Binding Failed"))
+        .andExpect(jsonPath("$.detail").value("Invalid value for 'status'. Allowed values: [ACTIVE, DELETED, INACTIVE]"))
+        .andExpect(jsonPath("$.instance").value("/user/" + userToUpdate.getId()));
+  }
+
+  @Test
+  void patchUser_withInvalidEmail_returnsBadRequest() throws Exception {
+    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"email": "not-an-email"}
+                """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.title").value("Request Validation Failed"))
+        .andExpect(jsonPath("$.errors[0]").value("email: A valid email must be provided"));
+  }
+
+  @Test
+  void patchUser_withoutUpdates_returnsBadRequest() throws Exception {
+    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {}
+                """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.title").value("Request Validation Failed"))
+        .andExpect(jsonPath("$.errors[0]").value("updates: At least one field must be provided"));
+  }
+
+  @Test
+  void patchUser_forMissingUser_returnsNotFound() throws Exception {
+    UUID missingUserId = UUID.randomUUID();
+
+    mockMvc.perform(patch("/user/{id}", missingUserId)
+            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"role": "ADMINISTRATOR"}
+                """))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.title").value("Not Found"))
+        .andExpect(jsonPath("$.detail").value("User with id '%s' not found".formatted(missingUserId)));
+  }
+
+  private User createUserWithProfile(String email, Role role) {
+    User user = new User();
+    user.setCustomer(new Customer());
+    user.setEmail(email);
+    user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
+    user.setRole(role);
+    user.setStatus(AccountStatus.ACTIVE);
+    user = userRepository.saveAndFlush(user);
+
+    Profile profile = new Profile();
+    profile.setUser(user);
+    profile.setPoints(0);
+    profileRepository.saveAndFlush(profile);
+    return user;
+  }
+
+  private String uniqueEmail(String prefix) {
+    return "%s-%s@micromarket.dev".formatted(prefix, UUID.randomUUID());
+  }
+
+  private String accessTokenFor(String email, String password) throws Exception {
+    MvcResult loginResult = mockMvc.perform(post("/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"email": "%s", "password": "%s"}
+                """.formatted(email, password)))
+        .andExpect(status().isOk())
+        .andReturn();
+
+    return JsonPath.read(loginResult.getResponse().getContentAsString(), "$.accessToken");
+  }
+
+  private String bearer(String accessToken) {
+    return "Bearer " + accessToken;
+  }
+}
