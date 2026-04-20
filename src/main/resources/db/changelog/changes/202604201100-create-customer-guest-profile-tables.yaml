@@ -25,31 +25,6 @@ databaseChangeLog:
               INSERT INTO customer (id, created_at, updated_at)
               SELECT users.id, users.created_at, users.updated_at
               FROM users;
-        - addColumn:
-            tableName: users
-            columns:
-              - column:
-                  name: customer_id
-                  type: uuid
-        - sql:
-            sql: |
-              UPDATE users
-              SET customer_id = id
-              WHERE customer_id IS NULL;
-        - addNotNullConstraint:
-            tableName: users
-            columnName: customer_id
-            columnDataType: uuid
-        - addUniqueConstraint:
-            tableName: users
-            columnNames: customer_id
-            constraintName: uk_users_customer_id
-        - addForeignKeyConstraint:
-            baseTableName: users
-            baseColumnNames: customer_id
-            referencedTableName: customer
-            referencedColumnNames: id
-            constraintName: fk_users_customer
         - createTable:
             tableName: guest
             columns:

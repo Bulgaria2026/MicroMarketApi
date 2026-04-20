@@ -1,7 +1,6 @@
 package com.noserbulgaria.micromarket.domain.product;
 
 import com.jayway.jsonpath.JsonPath;
-import com.noserbulgaria.micromarket.domain.customer.Customer;
 import com.noserbulgaria.micromarket.domain.order.OrderRepository;
 import com.noserbulgaria.micromarket.domain.profile.Profile;
 import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
@@ -79,7 +78,7 @@ class ProductIntegrationTests {
     jdbcTemplate.update("DELETE FROM order_item");
     jdbcTemplate.update("DELETE FROM orders");
     jdbcTemplate.update("DELETE FROM profile");
-    jdbcTemplate.update("DELETE FROM guests");
+    jdbcTemplate.update("DELETE FROM guest");
     jdbcTemplate.update("DELETE FROM users");
     jdbcTemplate.update("DELETE FROM customer");
     jdbcTemplate.update("DELETE FROM product");
@@ -461,7 +460,6 @@ class ProductIntegrationTests {
 
   private User createUser(String email, Role role) {
     User user = new User();
-    user.setCustomer(new Customer());
     user.setEmail(email);
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
     user.setRole(role);

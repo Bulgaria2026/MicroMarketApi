@@ -1,7 +1,7 @@
 package com.noserbulgaria.micromarket.security.auth.refresh;
 
-import com.noserbulgaria.micromarket.domain.customer.Customer;
 import com.noserbulgaria.micromarket.domain.order.OrderRepository;
+import com.noserbulgaria.micromarket.domain.profile.Profile;
 import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
 import com.noserbulgaria.micromarket.security.user.AccountStatus;
 import com.noserbulgaria.micromarket.security.user.Role;
@@ -60,12 +60,18 @@ class RefreshTokenCleanupJobTest {
     cleanDatabase();
 
     User user = new User();
-    user.setCustomer(new Customer());
     user.setEmail("cleanup@micromarket.dev");
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode("user123")));
     user.setRole(Role.USER);
     user.setStatus(AccountStatus.ACTIVE);
-    userId = userRepository.save(user).getId();
+    user = userRepository.save(user);
+
+    Profile profile = new Profile();
+    profile.setUser(user);
+    profile.setPoints(0);
+    profileRepository.save(profile);
+
+    userId = user.getId();
   }
 
   private void cleanDatabase() {
@@ -73,7 +79,7 @@ class RefreshTokenCleanupJobTest {
     jdbcTemplate.update("DELETE FROM order_item");
     jdbcTemplate.update("DELETE FROM orders");
     jdbcTemplate.update("DELETE FROM profile");
-    jdbcTemplate.update("DELETE FROM guests");
+    jdbcTemplate.update("DELETE FROM guest");
     jdbcTemplate.update("DELETE FROM users");
     jdbcTemplate.update("DELETE FROM customer");
     jdbcTemplate.update("DELETE FROM product");

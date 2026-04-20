@@ -49,18 +49,17 @@ public class AuthService {
     }
 
     User user = new User();
-    user.setCustomer(new Customer());
     user.setEmail(request.email());
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode(request.password())));
     user.setRole(Role.USER);
     user.setStatus(AccountStatus.ACTIVE);
     user = userRepository.save(user);
-    Customer registeredCustomer = user.getCustomer();
 
     Profile profile = new Profile();
     profile.setUser(user);
     profile.setPoints(0);
-    profileRepository.save(profile);
+
+    Customer registeredCustomer = profileRepository.save(profile);
 
     Optional<Guest> existingGuest = guestRepository.findByEmail(request.email());
     if (existingGuest.isPresent()) {

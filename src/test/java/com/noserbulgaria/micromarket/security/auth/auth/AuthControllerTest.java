@@ -1,6 +1,5 @@
 package com.noserbulgaria.micromarket.security.auth.auth;
 
-import com.noserbulgaria.micromarket.domain.customer.Customer;
 import com.noserbulgaria.micromarket.domain.order.OrderRepository;
 import com.noserbulgaria.micromarket.domain.profile.Profile;
 import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
@@ -69,7 +68,6 @@ class AuthControllerTest {
     cleanDatabase();
 
     User user = new User();
-    user.setCustomer(new Customer());
     user.setEmail("user@micromarket.dev");
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode("user123")));
     user.setRole(Role.USER);
@@ -87,7 +85,7 @@ class AuthControllerTest {
     jdbcTemplate.update("DELETE FROM order_item");
     jdbcTemplate.update("DELETE FROM orders");
     jdbcTemplate.update("DELETE FROM profile");
-    jdbcTemplate.update("DELETE FROM guests");
+    jdbcTemplate.update("DELETE FROM guest");
     jdbcTemplate.update("DELETE FROM users");
     jdbcTemplate.update("DELETE FROM customer");
     jdbcTemplate.update("DELETE FROM product");

@@ -7,9 +7,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.math.BigDecimal;
 import java.util.UUID;
 
-import com.noserbulgaria.micromarket.domain.customer.Customer;
 import com.noserbulgaria.micromarket.domain.product.Product;
 import com.noserbulgaria.micromarket.domain.product.ProductRepository;
+import com.noserbulgaria.micromarket.domain.profile.Profile;
 import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,6 +50,7 @@ class OrderControllerTest {
   private JdbcTemplate jdbcTemplate;
 
   private User testUser;
+  private Profile testProfile;
 
   private Order testOrder;
 
@@ -60,12 +61,16 @@ class OrderControllerTest {
     cleanDatabase();
 
     testUser = new User();
-    testUser.setCustomer(new Customer());
     testUser.setEmail("admin@test.local");
     testUser.setPassword("password");
     testUser.setRole(Role.ADMINISTRATOR);
     testUser.setStatus(AccountStatus.ACTIVE);
     testUser = userRepository.saveAndFlush(testUser);
+
+    testProfile = new Profile();
+    testProfile.setUser(testUser);
+    testProfile.setPoints(0);
+    testProfile = profileRepository.saveAndFlush(testProfile);
 
     testProduct = new Product();
     testProduct.setName("Cola");
@@ -78,7 +83,7 @@ class OrderControllerTest {
 
     testOrder = new Order();
     testOrder.setStatus(OrderStatusType.PENDING);
-    testOrder.setCustomer(testUser.getCustomer());
+    testOrder.setCustomer(testProfile);
 
     OrderItem item = new OrderItem();
     item.setOrder(testOrder);
@@ -95,7 +100,7 @@ class OrderControllerTest {
     jdbcTemplate.update("DELETE FROM order_item");
     jdbcTemplate.update("DELETE FROM orders");
     jdbcTemplate.update("DELETE FROM profile");
-    jdbcTemplate.update("DELETE FROM guests");
+    jdbcTemplate.update("DELETE FROM guest");
     jdbcTemplate.update("DELETE FROM users");
     jdbcTemplate.update("DELETE FROM customer");
     jdbcTemplate.update("DELETE FROM product");
@@ -144,7 +149,7 @@ class OrderControllerTest {
   void getOrdersAsAdministrator_withStatusFilter_returnsFiltered() throws Exception {
     Order filteredOut = new Order();
     filteredOut.setStatus(OrderStatusType.COMPLETED);
-    filteredOut.setCustomer(testUser.getCustomer());
+    filteredOut.setCustomer(testProfile);
     orderRepository.saveAndFlush(filteredOut);
 
     mockMvc.perform(get("/order").param("status", OrderStatusType.PENDING.name()))

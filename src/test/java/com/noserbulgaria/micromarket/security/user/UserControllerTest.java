@@ -1,7 +1,6 @@
 package com.noserbulgaria.micromarket.security.user;
 
 import com.jayway.jsonpath.JsonPath;
-import com.noserbulgaria.micromarket.domain.customer.Customer;
 import com.noserbulgaria.micromarket.domain.order.OrderRepository;
 import com.noserbulgaria.micromarket.domain.profile.Profile;
 import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
@@ -199,7 +198,6 @@ class UserControllerTest {
 
   private User createUserWithProfile(String email, Role role) {
     User user = new User();
-    user.setCustomer(new Customer());
     user.setEmail(email);
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
     user.setRole(role);
