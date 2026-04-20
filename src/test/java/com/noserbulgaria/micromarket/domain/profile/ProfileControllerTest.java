@@ -1,8 +1,6 @@
 package com.noserbulgaria.micromarket.domain.profile;
 
 import com.jayway.jsonpath.JsonPath;
-import com.noserbulgaria.micromarket.domain.order.OrderRepository;
-import com.noserbulgaria.micromarket.security.auth.refresh.RefreshTokenRepository;
 import com.noserbulgaria.micromarket.security.user.AccountStatus;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
@@ -44,13 +42,7 @@ class ProfileControllerTest {
   private ProfileRepository profileRepository;
 
   @Autowired
-  private OrderRepository orderRepository;
-
-  @Autowired
   private PasswordEncoder passwordEncoder;
-
-  @Autowired
-  private RefreshTokenRepository refreshTokenRepository;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;

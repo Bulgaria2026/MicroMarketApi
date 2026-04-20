@@ -75,11 +75,6 @@ public class RefreshTokenService {
     User user = userRepository.findById(presented.getUserId())
         .orElseThrow(() -> new UnauthorizedApiException(INVALID_REFRESH_TOKEN));
 
-    if (user.getStatus() != AccountStatus.ACTIVE) {
-      revokeAllForUser(user.getId());
-      throw new UnauthorizedApiException(INVALID_REFRESH_TOKEN);
-    }
-
     presented.setRevokedAt(now);
     String newRawToken = issueInFamily(user, presented.getFamilyId());
     return new RotationResult(user, newRawToken);

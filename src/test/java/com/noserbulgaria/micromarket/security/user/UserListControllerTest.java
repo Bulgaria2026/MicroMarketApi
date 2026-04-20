@@ -1,7 +1,6 @@
 package com.noserbulgaria.micromarket.security.user;
 
 import com.jayway.jsonpath.JsonPath;
-import com.noserbulgaria.micromarket.domain.order.OrderRepository;
 import com.noserbulgaria.micromarket.domain.profile.Profile;
 import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,9 +37,6 @@ class UserListControllerTest {
 
   @Autowired
   private ProfileRepository profileRepository;
-
-  @Autowired
-  private OrderRepository orderRepository;
 
   @Autowired
   private PasswordEncoder passwordEncoder;

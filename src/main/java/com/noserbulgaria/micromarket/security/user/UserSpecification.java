@@ -1,14 +1,13 @@
 package com.noserbulgaria.micromarket.security.user;
 
+import lombok.experimental.UtilityClass;
 import org.springframework.data.jpa.domain.Specification;
 
 import static com.noserbulgaria.micromarket.common.SpecificationBuilder.containsIgnoreCase;
 import static com.noserbulgaria.micromarket.common.SpecificationBuilder.equalTo;
 
+@UtilityClass
 public final class UserSpecification {
-
-  private UserSpecification() {
-  }
 
   public static Specification<User> withFilter(UserFilter filter) {
     return Specification.allOf(

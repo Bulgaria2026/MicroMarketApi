@@ -1,10 +1,8 @@
 package com.noserbulgaria.micromarket.domain.product;
 
 import com.jayway.jsonpath.JsonPath;
-import com.noserbulgaria.micromarket.domain.order.OrderRepository;
 import com.noserbulgaria.micromarket.domain.profile.Profile;
 import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
-import com.noserbulgaria.micromarket.security.auth.refresh.RefreshTokenRepository;
 import com.noserbulgaria.micromarket.security.user.AccountStatus;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
@@ -51,16 +49,10 @@ class ProductIntegrationTests {
   private ProductRepository productRepository;
 
   @Autowired
-  private OrderRepository orderRepository;
-
-  @Autowired
   private ProfileRepository profileRepository;
 
   @Autowired
   private PasswordEncoder passwordEncoder;
-
-  @Autowired
-  private RefreshTokenRepository refreshTokenRepository;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;

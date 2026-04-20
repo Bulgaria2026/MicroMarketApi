@@ -1,10 +1,8 @@
 package com.noserbulgaria.micromarket.security.user;
 
 import com.jayway.jsonpath.JsonPath;
-import com.noserbulgaria.micromarket.domain.order.OrderRepository;
 import com.noserbulgaria.micromarket.domain.profile.Profile;
 import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
-import com.noserbulgaria.micromarket.security.auth.refresh.RefreshTokenRepository;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,13 +40,7 @@ class UserControllerTest {
   private ProfileRepository profileRepository;
 
   @Autowired
-  private OrderRepository orderRepository;
-
-  @Autowired
   private PasswordEncoder passwordEncoder;
-
-  @Autowired
-  private RefreshTokenRepository refreshTokenRepository;
 
   private User adminUser;
   private User userToUpdate;

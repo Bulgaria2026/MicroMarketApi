@@ -1,6 +1,5 @@
 package com.noserbulgaria.micromarket.security.auth.refresh;
 
-import com.noserbulgaria.micromarket.domain.order.OrderRepository;
 import com.noserbulgaria.micromarket.domain.profile.Profile;
 import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
 import com.noserbulgaria.micromarket.security.user.AccountStatus;
@@ -40,9 +39,6 @@ class RefreshTokenCleanupJobTest {
 
   @Autowired
   private UserRepository userRepository;
-
-  @Autowired
-  private OrderRepository orderRepository;
 
   @Autowired
   private ProfileRepository profileRepository;
@@ -118,12 +114,16 @@ class RefreshTokenCleanupJobTest {
         .map(RefreshToken::getJti)
         .collect(Collectors.toUnmodifiableSet());
 
-    assertEquals(Set.of(fresh, recentlyRevoked, expiredWithinGrace), remaining,
-        "Cleanup must keep fresh, recently-revoked, and still-in-grace rows; delete others");
-    assertEquals(List.of(), refreshTokenRepository.findAll().stream()
-        .map(RefreshToken::getJti)
-        .filter(jti -> jti.equals(longExpired) || jti.equals(longRevoked))
-        .toList());
+    assertEquals(
+        Set.of(fresh, recentlyRevoked, expiredWithinGrace), remaining,
+        "Cleanup must keep fresh, recently-revoked, and still-in-grace rows; delete others"
+    );
+    assertEquals(
+        List.of(), refreshTokenRepository.findAll().stream()
+            .map(RefreshToken::getJti)
+            .filter(jti -> jti.equals(longExpired) || jti.equals(longRevoked))
+            .toList()
+    );
   }
 
   private UUID insert(java.util.function.Consumer<TokenAttrs> customizer) {
@@ -149,9 +149,8 @@ class RefreshTokenCleanupJobTest {
       return this;
     }
 
-    TokenAttrs revokedAt(Instant value) {
+    void revokedAt(Instant value) {
       this.revokedAt = value;
-      return this;
     }
   }
 }
