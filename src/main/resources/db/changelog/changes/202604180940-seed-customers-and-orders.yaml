@@ -1,0 +1,173 @@
+databaseChangeLog:
+  - changeSet:
+      id: 202604180940-1
+      author: Lon60
+      context: dev
+      comment: Seed a Profile for each seeded User so order seeds have a valid customer FK.
+      changes:
+        - insert:
+            tableName: customer
+            columns:
+              - column:
+                  name: id
+                  value: "c1000000-0000-0000-0000-000000000001"
+              - column:
+                  name: customer_type
+                  value: "PROFILE"
+              - column:
+                  name: created_at
+                  valueDate: "2023-10-01T10:00:00"
+        - insert:
+            tableName: profile
+            columns:
+              - column:
+                  name: id
+                  value: "c1000000-0000-0000-0000-000000000001"
+              - column:
+                  name: user_id
+                  value: "a0000000-0000-0000-0000-000000000001"
+              - column:
+                  name: points
+                  valueNumeric: 0
+        - insert:
+            tableName: customer
+            columns:
+              - column:
+                  name: id
+                  value: "c1000000-0000-0000-0000-000000000002"
+              - column:
+                  name: customer_type
+                  value: "PROFILE"
+              - column:
+                  name: created_at
+                  valueDate: "2023-10-01T10:00:00"
+        - insert:
+            tableName: profile
+            columns:
+              - column:
+                  name: id
+                  value: "c1000000-0000-0000-0000-000000000002"
+              - column:
+                  name: user_id
+                  value: "b0000000-0000-0000-0000-000000000001"
+              - column:
+                  name: points
+                  valueNumeric: 0
+
+  - changeSet:
+      id: 202604180940-2
+      author: Lon60
+      context: dev
+      comment: Seed a guest customer referenced by example guest orders.
+      changes:
+        - insert:
+            tableName: customer
+            columns:
+              - column:
+                  name: id
+                  value: "c2000000-0000-0000-0000-000000000001"
+              - column:
+                  name: customer_type
+                  value: "GUEST"
+              - column:
+                  name: created_at
+                  valueDate: "2023-10-02T14:00:00"
+        - insert:
+            tableName: guest
+            columns:
+              - column:
+                  name: id
+                  value: "c2000000-0000-0000-0000-000000000001"
+              - column:
+                  name: email
+                  value: "guest@micromarket.dev"
+
+  - changeSet:
+      id: 202604180940-3
+      author: Lon60
+      context: dev
+      changes:
+        - insert:
+            tableName: orders
+            columns:
+              - column:
+                  name: id
+                  value: "11111111-1111-1111-1111-111111111111"
+              - column:
+                  name: status
+                  value: "PAID"
+              - column:
+                  name: customer_id
+                  value: "c1000000-0000-0000-0000-000000000001"
+              - column:
+                  name: stripe_payment_intent_id
+                  value: "pi_seed_admin_paid"
+              - column:
+                  name: total_amount
+                  valueNumeric: 159.47
+              - column:
+                  name: created_at
+                  valueDate: "2023-10-01T10:30:00"
+        - insert:
+            tableName: orders
+            columns:
+              - column:
+                  name: id
+                  value: "22222222-2222-2222-2222-222222222222"
+              - column:
+                  name: status
+                  value: "PENDING_PAYMENT"
+              - column:
+                  name: customer_id
+                  value: "c1000000-0000-0000-0000-000000000002"
+              - column:
+                  name: stripe_payment_intent_id
+                  value: "pi_seed_user_pending"
+              - column:
+                  name: total_amount
+                  valueNumeric: 29.99
+              - column:
+                  name: created_at
+                  valueDate: "2023-10-02T14:15:00"
+        - insert:
+            tableName: order_item
+            columns:
+              - column:
+                  name: id
+                  value: "33333333-3333-3333-3333-333333333333"
+              - column:
+                  name: order_id
+                  value: "11111111-1111-1111-1111-111111111111"
+              - column:
+                  name: product_id
+                  value: "55555555-5555-5555-5555-555555555555"
+              - column:
+                  name: quantity
+                  valueNumeric: 2
+              - column:
+                  name: price_at_purchase
+                  valueNumeric: 29.99
+              - column:
+                  name: created_at
+                  valueDate: "2023-10-01T10:30:00"
+        - insert:
+            tableName: order_item
+            columns:
+              - column:
+                  name: id
+                  value: "44444444-4444-4444-4444-444444444444"
+              - column:
+                  name: order_id
+                  value: "11111111-1111-1111-1111-111111111111"
+              - column:
+                  name: product_id
+                  value: "66666666-6666-6666-6666-666666666666"
+              - column:
+                  name: quantity
+                  valueNumeric: 1
+              - column:
+                  name: price_at_purchase
+                  valueNumeric: 99.50
+              - column:
+                  name: created_at
+                  valueDate: "2023-10-01T10:30:00"

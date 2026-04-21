@@ -1,0 +1,25 @@
+databaseChangeLog:
+  - changeSet:
+      id: 202604180930-1
+      author: Lon60
+      changes:
+        - createTable:
+            tableName: stripe_event
+            columns:
+              - column:
+                  name: event_id
+                  type: varchar(255)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: event_type
+                  type: varchar(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: received_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+                  defaultValueComputed: CURRENT_TIMESTAMP

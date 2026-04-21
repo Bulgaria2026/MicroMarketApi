@@ -1,0 +1,69 @@
+databaseChangeLog:
+  - changeSet:
+      id: 202604180920-1
+      author: Lon60
+      comment: Wipe legacy seed orders so the new customer FK can be applied without orphan references. Safe in prod because no production orders exist yet (no creation endpoint).
+      changes:
+        - delete:
+            tableName: order_item
+        - delete:
+            tableName: orders
+
+  - changeSet:
+      id: 202604180920-2
+      author: Lon60
+      changes:
+        - update:
+            tableName: orders
+            columns:
+              - column:
+                  name: status
+                  value: PENDING_PAYMENT
+            where: status = 'PENDING'
+        - update:
+            tableName: orders
+            columns:
+              - column:
+                  name: status
+                  value: PAID
+            where: status = 'COMPLETED'
+
+  - changeSet:
+      id: 202604180920-3
+      author: Lon60
+      changes:
+        - addForeignKeyConstraint:
+            baseTableName: orders
+            baseColumnNames: customer_id
+            constraintName: fk_order_customer
+            referencedTableName: customer
+            referencedColumnNames: id
+
+  - changeSet:
+      id: 202604180920-4
+      author: Lon60
+      changes:
+        - addColumn:
+            tableName: orders
+            columns:
+              - column:
+                  name: stripe_payment_intent_id
+                  type: varchar(255)
+                  constraints:
+                    nullable: true
+                    unique: true
+                    uniqueConstraintName: uk_order_stripe_payment_intent_id
+              - column:
+                  name: total_amount
+                  type: decimal(10,2)
+                  constraints:
+                    nullable: false
+                  defaultValueNumeric: 0
+
+  - changeSet:
+      id: 202604180920-5
+      author: Lon60
+      changes:
+        - dropDefaultValue:
+            tableName: orders
+            columnName: total_amount

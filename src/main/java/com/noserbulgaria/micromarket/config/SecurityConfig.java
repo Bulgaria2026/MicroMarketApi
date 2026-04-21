@@ -7,8 +7,8 @@ import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 import com.noserbulgaria.micromarket.exception.UnauthorizedApiException;
-import com.noserbulgaria.micromarket.security.user.CustomUserDetails;
-import com.noserbulgaria.micromarket.security.user.CustomUserDetailsService;
+import com.noserbulgaria.micromarket.auth.user.CustomUserDetails;
+import com.noserbulgaria.micromarket.auth.user.CustomUserDetailsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,6 +54,11 @@ public class SecurityConfig {
       "/product/{id}/history"
   };
 
+  private static final String[] PUBLIC_POST_ENDPOINTS = {
+      "/order",
+      "/webhooks/stripe"
+  };
+
   private final RSAPublicKey rsaPublicKey;
   private final RSAPrivateKey rsaPrivateKey;
 
@@ -69,6 +74,7 @@ public class SecurityConfig {
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.GET, PUBLIC_GET_ENDPOINTS).permitAll()
+            .requestMatchers(HttpMethod.POST, PUBLIC_POST_ENDPOINTS).permitAll()
             .requestMatchers(
                 "/auth/**",
                 "/swagger-ui/**",

@@ -25,6 +25,7 @@ ext {
     openapiWebmvcVersion = "3.0.2"
     googleErrorProneCoreVersion = "2.49.0"
     uberNullawayVersion = "0.13.3"
+    stripeVersion = "32.0.0"
 }
 
 dependencies {
@@ -44,6 +45,9 @@ dependencies {
 
     // Documentation / API
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.2"
+
+    // Payments
+    implementation "com.stripe:stripe-java:${stripeVersion}"
 
     // Mapping & Code Generation
     implementation "org.mapstruct:mapstruct:${mapstructVersion}"
