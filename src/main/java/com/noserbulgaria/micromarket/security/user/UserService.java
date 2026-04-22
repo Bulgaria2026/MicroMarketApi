@@ -7,8 +7,6 @@ import com.noserbulgaria.micromarket.security.user.dto.UserMapper;
 import com.noserbulgaria.micromarket.security.user.dto.UserPatchRequestDto;
 import com.noserbulgaria.micromarket.security.user.dto.UserResponseDto;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,12 +19,6 @@ public class UserService {
   private final UserRepository userRepository;
   private final UserMapper userMapper;
   private final RefreshTokenService refreshTokenService;
-
-  @Transactional(readOnly = true)
-  public Page<UserResponseDto> findAll(UserFilter filter, Pageable pageable) {
-    return userRepository.findAll(UserSpecification.withFilter(filter), pageable)
-        .map(userMapper::toDto);
-  }
 
   @Transactional(readOnly = true)
   public UserResponseDto getByIdOrThrow(UUID id) {

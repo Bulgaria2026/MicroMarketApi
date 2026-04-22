@@ -1,6 +1,7 @@
 package com.noserbulgaria.micromarket.domain.profile;
 
 import com.noserbulgaria.micromarket.domain.profile.dto.ProfileMapper;
+import com.noserbulgaria.micromarket.domain.profile.dto.ProfileRequestDto;
 import com.noserbulgaria.micromarket.domain.profile.dto.ProfileResponseDto;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,13 @@ public class ProfileService {
   public ProfileResponseDto getByUserIdOrThrow(UUID userId) {
     return profileMapper.toDto(profileRepository.findByUserId(userId)
         .orElseThrow(() -> new NotFoundApiException("Profile with userId '%s' not found".formatted(userId))));
+  }
+
+  public ProfileResponseDto updateByIdOrThrow(UUID id, ProfileRequestDto request) {
+    Profile profile = profileRepository.findById(id)
+        .orElseThrow(() -> new NotFoundApiException("Profile with id '%s' not found".formatted(id)));
+    profileMapper.update(request, profile);
+    return profileMapper.toDto(profileRepository.save(profile));
   }
 
   @Transactional(readOnly = true)

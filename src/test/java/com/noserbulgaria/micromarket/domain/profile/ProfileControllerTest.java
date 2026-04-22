@@ -22,6 +22,7 @@ import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -79,13 +80,15 @@ class ProfileControllerTest {
             .header("Authorization", bearer(accessTokenFor(ownerUser.getEmail(), PASSWORD))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(ownerProfile.getId().toString()))
-        .andExpect(jsonPath("$.userId").value(ownerUser.getId().toString()))
+        .andExpect(jsonPath("$.user.id").value(ownerUser.getId().toString()))
+        .andExpect(jsonPath("$.user.email").value(ownerUser.getEmail()))
+        .andExpect(jsonPath("$.user.role").value(ownerUser.getRole().name()))
+        .andExpect(jsonPath("$.user.status").value(ownerUser.getStatus().name()))
         .andExpect(jsonPath("$.points").value(ownerProfile.getPoints()))
         .andExpect(jsonPath("$.createdAt").isNotEmpty())
         .andExpect(jsonPath("$.updatedAt").isNotEmpty())
-        .andExpect(jsonPath("$.user").doesNotExist())
-        .andExpect(jsonPath("$.password").doesNotExist())
-        .andExpect(jsonPath("$.customer").doesNotExist());
+        .andExpect(jsonPath("$.user.password").doesNotExist())
+        .andExpect(jsonPath("$.password").doesNotExist());
   }
 
   @Test
@@ -94,7 +97,9 @@ class ProfileControllerTest {
             .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(ownerProfile.getId().toString()))
-        .andExpect(jsonPath("$.userId").value(ownerUser.getId().toString()));
+        .andExpect(jsonPath("$.user.id").value(ownerUser.getId().toString()))
+        .andExpect(jsonPath("$.user.email").value(ownerUser.getEmail()))
+        .andExpect(jsonPath("$.user.password").doesNotExist());
   }
 
   @Test
@@ -110,6 +115,59 @@ class ProfileControllerTest {
 
     mockMvc.perform(get("/profile/{id}", profileId)
             .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD))))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.title").value("Not Found"))
+        .andExpect(jsonPath("$.detail").value("Profile with id '%s' not found".formatted(profileId)));
+  }
+
+  @Test
+  void updateById_asAdministrator_updatesProfile() throws Exception {
+    mockMvc.perform(put("/profile/{id}", ownerProfile.getId())
+            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"points": 200}
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(ownerProfile.getId().toString()))
+        .andExpect(jsonPath("$.user.id").value(ownerUser.getId().toString()))
+        .andExpect(jsonPath("$.points").value(200));
+  }
+
+  @Test
+  void updateById_asOwner_returnsForbidden() throws Exception {
+    mockMvc.perform(put("/profile/{id}", ownerProfile.getId())
+            .header("Authorization", bearer(accessTokenFor(ownerUser.getEmail(), PASSWORD)))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"points": 200}
+                """))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void updateById_invalidBody_returnsBadRequest() throws Exception {
+    mockMvc.perform(put("/profile/{id}", ownerProfile.getId())
+            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"points": -1}
+                """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.title").value("Request Validation Failed"))
+        .andExpect(jsonPath("$.errors[0]").value("points: Points must be zero or greater"));
+  }
+
+  @Test
+  void updateById_missingProfile_returnsNotFound() throws Exception {
+    UUID profileId = UUID.randomUUID();
+
+    mockMvc.perform(put("/profile/{id}", profileId)
+            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"points": 200}
+                """))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.title").value("Not Found"))
         .andExpect(jsonPath("$.detail").value("Profile with id '%s' not found".formatted(profileId)));
