@@ -10,9 +10,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SpringBootTest
 @ActiveProfiles("test")
+@Transactional
 class RefreshTokenCleanupJobTest {
 
   @Autowired
@@ -46,15 +47,10 @@ class RefreshTokenCleanupJobTest {
   @Autowired
   private PasswordEncoder passwordEncoder;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
   private UUID userId;
 
   @BeforeEach
   void setUp() {
-    cleanDatabase();
-
     User user = new User();
     user.setEmail("cleanup@micromarket.dev");
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode("user123")));
@@ -68,17 +64,6 @@ class RefreshTokenCleanupJobTest {
     profileRepository.save(profile);
 
     userId = user.getId();
-  }
-
-  private void cleanDatabase() {
-    jdbcTemplate.update("DELETE FROM refresh_tokens");
-    jdbcTemplate.update("DELETE FROM order_item");
-    jdbcTemplate.update("DELETE FROM orders");
-    jdbcTemplate.update("DELETE FROM profile");
-    jdbcTemplate.update("DELETE FROM guest");
-    jdbcTemplate.update("DELETE FROM users");
-    jdbcTemplate.update("DELETE FROM customer");
-    jdbcTemplate.update("DELETE FROM product");
   }
 
   @Test

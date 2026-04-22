@@ -1,6 +1,5 @@
 package com.noserbulgaria.micromarket.security.user;
 
-import com.jayway.jsonpath.JsonPath;
 import com.noserbulgaria.micromarket.domain.profile.Profile;
 import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
 import org.junit.jupiter.api.Assertions;
@@ -10,24 +9,30 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.TestExecutionEvent;
+import org.springframework.security.test.context.support.WithUserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Transactional
 class UserControllerTest {
 
+  private static final String ADMIN_EMAIL = "admin@micromarket.dev";
+  private static final String USER_EMAIL = "user-controller-user@micromarket.dev";
+  private static final String EXISTING_EMAIL = "user-controller-existing@micromarket.dev";
+  private static final String UPDATED_EMAIL = "user-controller-updated@micromarket.dev";
   private static final String PASSWORD = "user12345";
 
   @Autowired
@@ -42,19 +47,17 @@ class UserControllerTest {
   @Autowired
   private PasswordEncoder passwordEncoder;
 
-  private User adminUser;
   private User userToUpdate;
 
   @BeforeEach
   void setUp() {
-    adminUser = createUserWithProfile(uniqueEmail("admin"), Role.ADMINISTRATOR);
-    userToUpdate = createUserWithProfile(uniqueEmail("user"), Role.USER);
+    userToUpdate = createUserWithProfile(USER_EMAIL, Role.USER);
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void patchUser_withValidRole_updatesRole() throws Exception {
     mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"role": "ADMINISTRATOR"}
@@ -69,11 +72,11 @@ class UserControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void patchUser_withValidEmail_updatesEmail() throws Exception {
-    String newEmail = uniqueEmail("updated");
+    String newEmail = UPDATED_EMAIL;
 
     mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"email": "%s"}
@@ -88,9 +91,9 @@ class UserControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void patchUser_withValidStatus_updatesStatus() throws Exception {
     mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"status": "INACTIVE"}
@@ -105,11 +108,11 @@ class UserControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void patchUser_withDuplicateEmail_returnsConflict() throws Exception {
-    User existingUser = createUserWithProfile(uniqueEmail("existing"), Role.USER);
+    User existingUser = createUserWithProfile(EXISTING_EMAIL, Role.USER);
 
     mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"email": "%s"}
@@ -120,9 +123,9 @@ class UserControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void patchUser_withInvalidRole_returnsBadRequest() throws Exception {
     mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"role": "INVALID"}
@@ -134,9 +137,9 @@ class UserControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void patchUser_withInvalidStatus_returnsBadRequest() throws Exception {
     mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"status": "WRONG"}
@@ -148,9 +151,9 @@ class UserControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void patchUser_withInvalidEmail_returnsBadRequest() throws Exception {
     mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"email": "not-an-email"}
@@ -161,9 +164,9 @@ class UserControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void patchUser_withoutUpdates_returnsBadRequest() throws Exception {
     mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {}
@@ -174,11 +177,11 @@ class UserControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void patchUser_forMissingUser_returnsNotFound() throws Exception {
     UUID missingUserId = UUID.randomUUID();
 
     mockMvc.perform(patch("/user/{id}", missingUserId)
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"role": "ADMINISTRATOR"}
@@ -201,25 +204,5 @@ class UserControllerTest {
     profile.setPoints(0);
     profileRepository.saveAndFlush(profile);
     return user;
-  }
-
-  private String uniqueEmail(String prefix) {
-    return "%s-%s@micromarket.dev".formatted(prefix, UUID.randomUUID());
-  }
-
-  private String accessTokenFor(String email, String password) throws Exception {
-    MvcResult loginResult = mockMvc.perform(post("/auth/login")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content("""
-                {"email": "%s", "password": "%s"}
-                """.formatted(email, password)))
-        .andExpect(status().isOk())
-        .andReturn();
-
-    return JsonPath.read(loginResult.getResponse().getContentAsString(), "$.accessToken");
-  }
-
-  private String bearer(String accessToken) {
-    return "Bearer " + accessToken;
   }
 }

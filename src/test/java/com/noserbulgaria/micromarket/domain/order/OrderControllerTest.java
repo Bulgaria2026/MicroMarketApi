@@ -16,10 +16,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.test.context.support.TestExecutionEvent;
+import org.springframework.security.test.context.support.WithUserDetails;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.AccountStatus;
@@ -29,7 +30,12 @@ import com.noserbulgaria.micromarket.security.user.UserRepository;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Transactional
 class OrderControllerTest {
+
+  private static final String ADMIN_EMAIL = "admin@micromarket.dev";
+  private static final String USER_EMAIL = "user@micromarket.dev";
+  private static final String CUSTOMER_EMAIL = "order-customer@micromarket.dev";
 
   @Autowired
   private MockMvc mockMvc;
@@ -46,29 +52,24 @@ class OrderControllerTest {
   @Autowired
   private ProfileRepository profileRepository;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  private User testUser;
+  private User customerUser;
   private Profile testProfile;
-
   private Order testOrder;
-
   private Product testProduct;
 
   @BeforeEach
   void setUp() {
-    cleanDatabase();
+    orderRepository.deleteAll();
 
-    testUser = new User();
-    testUser.setEmail("admin@test.local");
-    testUser.setPassword("password");
-    testUser.setRole(Role.ADMINISTRATOR);
-    testUser.setStatus(AccountStatus.ACTIVE);
-    testUser = userRepository.saveAndFlush(testUser);
+    customerUser = new User();
+    customerUser.setEmail(CUSTOMER_EMAIL);
+    customerUser.setPassword("password");
+    customerUser.setRole(Role.USER);
+    customerUser.setStatus(AccountStatus.ACTIVE);
+    customerUser = userRepository.saveAndFlush(customerUser);
 
     testProfile = new Profile();
-    testProfile.setUser(testUser);
+    testProfile.setUser(customerUser);
     testProfile.setPoints(0);
     testProfile = profileRepository.saveAndFlush(testProfile);
 
@@ -95,33 +96,22 @@ class OrderControllerTest {
     testOrder = orderRepository.saveAndFlush(testOrder);
   }
 
-  private void cleanDatabase() {
-    jdbcTemplate.update("DELETE FROM refresh_tokens");
-    jdbcTemplate.update("DELETE FROM order_item");
-    jdbcTemplate.update("DELETE FROM orders");
-    jdbcTemplate.update("DELETE FROM profile");
-    jdbcTemplate.update("DELETE FROM guest");
-    jdbcTemplate.update("DELETE FROM users");
-    jdbcTemplate.update("DELETE FROM customer");
-    jdbcTemplate.update("DELETE FROM product");
-  }
-
   @Test
-  @WithMockUser(roles = "USER")
+  @WithUserDetails(value = USER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getOrdersAsUser_returnsForbidden() throws Exception {
     mockMvc.perform(get("/order")).andExpect(status().isForbidden());
   }
 
   @Test
-  @WithMockUser(roles = "USER")
+  @WithUserDetails(value = USER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getOrderByIdAsUser_returnsForbidden() throws Exception {
     mockMvc.perform(get("/order/{id}", UUID.randomUUID())).andExpect(status().isForbidden());
   }
 
   @Test
-  @WithMockUser(roles = "ADMINISTRATOR")
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getOrdersAsAdministrator_returnsOk() throws Exception {
-    mockMvc.perform(get("/order"))
+    mockMvc.perform(get("/order").param("customerId", testProfile.getId().toString()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()))
         .andExpect(jsonPath("$.content[0].orderItems").isArray())
@@ -132,7 +122,7 @@ class OrderControllerTest {
   }
 
   @Test
-  @WithMockUser(roles = "ADMINISTRATOR")
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getOrderByIdAsAdministrator_returnsOk() throws Exception {
     mockMvc.perform(get("/order/{id}", testOrder.getId()))
         .andExpect(status().isOk())
@@ -145,14 +135,16 @@ class OrderControllerTest {
   }
 
   @Test
-  @WithMockUser(roles = "ADMINISTRATOR")
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getOrdersAsAdministrator_withStatusFilter_returnsFiltered() throws Exception {
     Order filteredOut = new Order();
     filteredOut.setStatus(OrderStatusType.COMPLETED);
     filteredOut.setCustomer(testProfile);
     orderRepository.saveAndFlush(filteredOut);
 
-    mockMvc.perform(get("/order").param("status", OrderStatusType.PENDING.name()))
+    mockMvc.perform(get("/order")
+            .param("customerId", testProfile.getId().toString())
+            .param("status", OrderStatusType.PENDING.name()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
         .andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()))
@@ -161,7 +153,7 @@ class OrderControllerTest {
   }
 
   @Test
-  @WithMockUser(roles = "ADMINISTRATOR")
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getMissingOrderAsAdministrator_returnsNotFound() throws Exception {
     UUID orderId = UUID.randomUUID();
 

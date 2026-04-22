@@ -1,6 +1,5 @@
 package com.noserbulgaria.micromarket.domain.profile;
 
-import com.jayway.jsonpath.JsonPath;
 import com.noserbulgaria.micromarket.security.user.AccountStatus;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
@@ -11,17 +10,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.test.context.support.TestExecutionEvent;
+import org.springframework.security.test.context.support.WithUserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -29,8 +28,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Transactional
 class ProfileControllerTest {
 
+  private static final String ADMIN_EMAIL = "admin@micromarket.dev";
+  private static final String OWNER_EMAIL = "profile-owner@micromarket.dev";
+  private static final String OTHER_EMAIL = "profile-other@micromarket.dev";
   private static final String PASSWORD = "user12345";
 
   @Autowired
@@ -45,39 +48,21 @@ class ProfileControllerTest {
   @Autowired
   private PasswordEncoder passwordEncoder;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  private User adminUser;
   private User ownerUser;
   private User otherUser;
   private Profile ownerProfile;
 
   @BeforeEach
   void setUp() {
-    cleanDatabase();
-
-    adminUser = createUserWithProfile("admin@micromarket.dev", Role.ADMINISTRATOR);
-    ownerUser = createUserWithProfile("owner@micromarket.dev", Role.USER);
-    otherUser = createUserWithProfile("other@micromarket.dev", Role.USER);
+    ownerUser = createUserWithProfile(OWNER_EMAIL, Role.USER);
+    otherUser = createUserWithProfile(OTHER_EMAIL, Role.USER);
     ownerProfile = profileRepository.findByUserId(ownerUser.getId()).orElseThrow();
   }
 
-  private void cleanDatabase() {
-    jdbcTemplate.update("DELETE FROM refresh_tokens");
-    jdbcTemplate.update("DELETE FROM order_item");
-    jdbcTemplate.update("DELETE FROM orders");
-    jdbcTemplate.update("DELETE FROM profile");
-    jdbcTemplate.update("DELETE FROM guest");
-    jdbcTemplate.update("DELETE FROM users");
-    jdbcTemplate.update("DELETE FROM customer");
-    jdbcTemplate.update("DELETE FROM product");
-  }
-
   @Test
+  @WithUserDetails(value = OWNER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getById_asOwner_returnsProfile() throws Exception {
-    mockMvc.perform(get("/profile/own")
-            .header("Authorization", bearer(accessTokenFor(ownerUser.getEmail(), PASSWORD))))
+    mockMvc.perform(get("/profile/own"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(ownerProfile.getId().toString()))
         .andExpect(jsonPath("$.user.id").value(ownerUser.getId().toString()))
@@ -92,9 +77,9 @@ class ProfileControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getById_asAdministrator_returnsProfile() throws Exception {
-    mockMvc.perform(get("/profile/{id}", ownerProfile.getId())
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD))))
+    mockMvc.perform(get("/profile/{id}", ownerProfile.getId()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(ownerProfile.getId().toString()))
         .andExpect(jsonPath("$.user.id").value(ownerUser.getId().toString()))
@@ -103,27 +88,27 @@ class ProfileControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = OTHER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getById_asDifferentUser_returnsForbidden() throws Exception {
-    mockMvc.perform(get("/profile/{id}", ownerProfile.getId())
-            .header("Authorization", bearer(accessTokenFor(otherUser.getEmail(), PASSWORD))))
+    mockMvc.perform(get("/profile/{id}", ownerProfile.getId()))
         .andExpect(status().isForbidden());
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getById_missingProfile_returnsNotFound() throws Exception {
     UUID profileId = UUID.randomUUID();
 
-    mockMvc.perform(get("/profile/{id}", profileId)
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD))))
+    mockMvc.perform(get("/profile/{id}", profileId))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.title").value("Not Found"))
         .andExpect(jsonPath("$.detail").value("Profile with id '%s' not found".formatted(profileId)));
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void updateById_asAdministrator_updatesProfile() throws Exception {
     mockMvc.perform(put("/profile/{id}", ownerProfile.getId())
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"points": 200}
@@ -135,9 +120,9 @@ class ProfileControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = OWNER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void updateById_asOwner_returnsForbidden() throws Exception {
     mockMvc.perform(put("/profile/{id}", ownerProfile.getId())
-            .header("Authorization", bearer(accessTokenFor(ownerUser.getEmail(), PASSWORD)))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"points": 200}
@@ -146,9 +131,9 @@ class ProfileControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void updateById_invalidBody_returnsBadRequest() throws Exception {
     mockMvc.perform(put("/profile/{id}", ownerProfile.getId())
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"points": -1}
@@ -159,11 +144,11 @@ class ProfileControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void updateById_missingProfile_returnsNotFound() throws Exception {
     UUID profileId = UUID.randomUUID();
 
     mockMvc.perform(put("/profile/{id}", profileId)
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"points": 200}
@@ -186,21 +171,5 @@ class ProfileControllerTest {
     profile.setPoints(0);
     profileRepository.saveAndFlush(profile);
     return user;
-  }
-
-  private String accessTokenFor(String email, String password) throws Exception {
-    MvcResult loginResult = mockMvc.perform(post("/auth/login")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content("""
-                {"email": "%s", "password": "%s"}
-                """.formatted(email, password)))
-        .andExpect(status().isOk())
-        .andReturn();
-
-    return JsonPath.read(loginResult.getResponse().getContentAsString(), "$.accessToken");
-  }
-
-  private String bearer(String accessToken) {
-    return "Bearer " + accessToken;
   }
 }

@@ -1,9 +1,7 @@
 package com.noserbulgaria.micromarket.security.auth.auth;
 
-import com.noserbulgaria.micromarket.domain.profile.Profile;
-import com.noserbulgaria.micromarket.domain.profile.ProfileRepository;
 import com.noserbulgaria.micromarket.security.user.AccountStatus;
-import com.noserbulgaria.micromarket.security.user.Role;
+import com.noserbulgaria.micromarket.security.auth.refresh.RefreshTokenRepository;
 import com.noserbulgaria.micromarket.security.user.User;
 import com.noserbulgaria.micromarket.security.user.UserRepository;
 import jakarta.servlet.http.Cookie;
@@ -14,8 +12,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -45,40 +41,15 @@ class AuthControllerTest {
   private UserRepository userRepository;
 
   @Autowired
-  private ProfileRepository profileRepository;
-
-  @Autowired
-  private PasswordEncoder passwordEncoder;
-
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private RefreshTokenRepository refreshTokenRepository;
 
   @BeforeEach
   void setUp() {
-    cleanDatabase();
+    refreshTokenRepository.deleteAll();
 
-    User user = new User();
-    user.setEmail("user@micromarket.dev");
-    user.setPassword(Objects.requireNonNull(passwordEncoder.encode("user123")));
-    user.setRole(Role.USER);
+    User user = userRepository.findByEmail("user@micromarket.dev").orElseThrow();
     user.setStatus(AccountStatus.ACTIVE);
-    user = userRepository.save(user);
-
-    Profile profile = new Profile();
-    profile.setUser(user);
-    profile.setPoints(0);
-    Profile testProfile = profileRepository.save(profile);
-  }
-
-  private void cleanDatabase() {
-    jdbcTemplate.update("DELETE FROM refresh_tokens");
-    jdbcTemplate.update("DELETE FROM order_item");
-    jdbcTemplate.update("DELETE FROM orders");
-    jdbcTemplate.update("DELETE FROM profile");
-    jdbcTemplate.update("DELETE FROM guest");
-    jdbcTemplate.update("DELETE FROM users");
-    jdbcTemplate.update("DELETE FROM customer");
-    jdbcTemplate.update("DELETE FROM product");
+    userRepository.saveAndFlush(user);
   }
 
   // --- Login tests ---

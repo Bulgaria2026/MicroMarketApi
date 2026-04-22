@@ -1,6 +1,5 @@
 package com.noserbulgaria.micromarket.domain.customer;
 
-import com.jayway.jsonpath.JsonPath;
 import com.noserbulgaria.micromarket.domain.guest.Guest;
 import com.noserbulgaria.micromarket.domain.guest.GuestRepository;
 import com.noserbulgaria.micromarket.domain.profile.Profile;
@@ -9,32 +8,36 @@ import com.noserbulgaria.micromarket.security.user.AccountStatus;
 import com.noserbulgaria.micromarket.security.user.Role;
 import com.noserbulgaria.micromarket.security.user.User;
 import com.noserbulgaria.micromarket.security.user.UserRepository;
+import com.noserbulgaria.micromarket.domain.order.OrderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.test.context.support.TestExecutionEvent;
+import org.springframework.security.test.context.support.WithUserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Transactional
 class CustomerControllerTest {
 
+  private static final String ADMIN_EMAIL = "admin@micromarket.dev";
+  private static final String USER_EMAIL = "user@micromarket.dev";
+  private static final String INACTIVE_ADMIN_EMAIL = "customer-inactive-admin@micromarket.dev";
   private static final String PASSWORD = "user12345";
 
   @Autowired
@@ -53,7 +56,7 @@ class CustomerControllerTest {
   private PasswordEncoder passwordEncoder;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private OrderRepository orderRepository;
 
   private User adminUser;
   private User activeUser;
@@ -65,34 +68,39 @@ class CustomerControllerTest {
 
   @BeforeEach
   void setUp() {
-    cleanDatabase();
+    orderRepository.deleteAll();
+    orderRepository.flush();
+    guestRepository.deleteAll();
+    guestRepository.flush();
+    profileRepository.deleteAll();
+    profileRepository.flush();
 
-    adminUser = createUser(uniqueEmail("admin"), Role.ADMINISTRATOR, AccountStatus.ACTIVE);
+    adminUser = userRepository.findByEmail(ADMIN_EMAIL).orElseThrow();
     adminProfile = createProfile(adminUser, 50);
 
     pause();
-    activeUser = createUser(uniqueEmail("user"), Role.USER, AccountStatus.ACTIVE);
+    activeUser = userRepository.findByEmail(USER_EMAIL).orElseThrow();
     activeProfile = createProfile(activeUser, 15);
 
     pause();
-    inactiveAdminUser = createUser(uniqueEmail("inactive-admin"), Role.ADMINISTRATOR, AccountStatus.INACTIVE);
+    inactiveAdminUser = createUser(INACTIVE_ADMIN_EMAIL, Role.ADMINISTRATOR, AccountStatus.INACTIVE);
     inactiveAdminProfile = createProfile(inactiveAdminUser, 120);
 
     pause();
-    guestCustomer = createGuest(uniqueEmail("guest"));
+    guestCustomer = createGuest("customer-guest@micromarket.dev");
   }
 
   @Test
+  @WithUserDetails(value = USER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_asNonAdmin_returnsForbidden() throws Exception {
-    mockMvc.perform(get("/customer")
-            .header("Authorization", bearer(accessTokenFor(activeUser.getEmail(), PASSWORD))))
+    mockMvc.perform(get("/customer"))
         .andExpect(status().isForbidden());
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_asAdmin_returnsPaginatedMixedCustomers() throws Exception {
     mockMvc.perform(get("/customer")
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .param("page", "0")
             .param("size", "10"))
         .andExpect(status().isOk())
@@ -103,9 +111,9 @@ class CustomerControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_returnsGuestRowsWithNullableProfileFields() throws Exception {
     mockMvc.perform(get("/customer")
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .param("email", "guest"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
@@ -117,9 +125,9 @@ class CustomerControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_returnsProfileRowsWithFilledFields() throws Exception {
     mockMvc.perform(get("/customer")
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .param("email", activeUser.getEmail()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
@@ -131,20 +139,20 @@ class CustomerControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_withEmailFilter_matchesGuestsAndProfiles() throws Exception {
     mockMvc.perform(get("/customer")
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .param("email", "admin"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(2));
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_withCreatedAtRange_filtersCustomers() throws Exception {
     Instant to = activeProfile.getCreatedAt();
 
     mockMvc.perform(get("/customer")
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .param("createdFrom", activeProfile.getCreatedAt().toString())
             .param("createdTo", to.toString()))
         .andExpect(status().isOk())
@@ -153,9 +161,9 @@ class CustomerControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_withRoleFilter_returnsOnlyMatchingProfiles() throws Exception {
     mockMvc.perform(get("/customer")
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .param("role", Role.ADMINISTRATOR.name()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(2))
@@ -163,9 +171,9 @@ class CustomerControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_withStatusFilter_returnsOnlyMatchingProfiles() throws Exception {
     mockMvc.perform(get("/customer")
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .param("status", AccountStatus.INACTIVE.name()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
@@ -174,9 +182,9 @@ class CustomerControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_withPointsRange_returnsOnlyMatchingProfiles() throws Exception {
     mockMvc.perform(get("/customer")
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .param("minPoints", "100")
             .param("maxPoints", "200"))
         .andExpect(status().isOk())
@@ -186,9 +194,9 @@ class CustomerControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_withCombinedFilters_returnsMatchingProfiles() throws Exception {
     mockMvc.perform(get("/customer")
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .param("email", "inactive-admin")
             .param("role", Role.ADMINISTRATOR.name())
             .param("status", AccountStatus.INACTIVE.name())
@@ -200,18 +208,18 @@ class CustomerControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_withSupportedSort_returnsOrderedCustomers() throws Exception {
     mockMvc.perform(get("/customer")
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .param("sort", "createdAt,asc"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].id").value(adminProfile.getId().toString()));
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_withUnsupportedSort_returnsBadRequest() throws Exception {
     mockMvc.perform(get("/customer")
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD)))
             .param("sort", "email,asc"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.title").value("Bad Request"))
@@ -220,23 +228,12 @@ class CustomerControllerTest {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAllUsersEndpoint_noLongerExists() throws Exception {
-    mockMvc.perform(get("/user")
-            .header("Authorization", bearer(accessTokenFor(adminUser.getEmail(), PASSWORD))))
+    mockMvc.perform(get("/user"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.title").value("Resource Not Found"))
         .andExpect(jsonPath("$.detail").value("Resource 'user' was not found."));
-  }
-
-  private void cleanDatabase() {
-    jdbcTemplate.update("DELETE FROM refresh_tokens");
-    jdbcTemplate.update("DELETE FROM order_item");
-    jdbcTemplate.update("DELETE FROM orders");
-    jdbcTemplate.update("DELETE FROM profile");
-    jdbcTemplate.update("DELETE FROM guest");
-    jdbcTemplate.update("DELETE FROM users");
-    jdbcTemplate.update("DELETE FROM customer");
-    jdbcTemplate.update("DELETE FROM product");
   }
 
   private User createUser(String email, Role role, AccountStatus status) {
@@ -268,25 +265,5 @@ class CustomerControllerTest {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("Interrupted while preparing test data", e);
     }
-  }
-
-  private String uniqueEmail(String prefix) {
-    return "%s-%s@micromarket.dev".formatted(prefix, UUID.randomUUID());
-  }
-
-  private String accessTokenFor(String email, String password) throws Exception {
-    MvcResult loginResult = mockMvc.perform(post("/auth/login")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content("""
-                {"email": "%s", "password": "%s"}
-                """.formatted(email, password)))
-        .andExpect(status().isOk())
-        .andReturn();
-
-    return JsonPath.read(loginResult.getResponse().getContentAsString(), "$.accessToken");
-  }
-
-  private String bearer(String accessToken) {
-    return "Bearer " + accessToken;
   }
 }
