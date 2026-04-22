@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.TestExecutionEvent;
 import org.springframework.security.test.context.support.WithUserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -39,6 +40,10 @@ class CustomerControllerTest {
   private static final String USER_EMAIL = "user@micromarket.dev";
   private static final String INACTIVE_ADMIN_EMAIL = "customer-inactive-admin@micromarket.dev";
   private static final String PASSWORD = "user12345";
+  private static final Instant ADMIN_CREATED_AT = Instant.parse("2026-01-01T10:00:00Z");
+  private static final Instant ACTIVE_CREATED_AT = Instant.parse("2026-01-01T10:01:00Z");
+  private static final Instant INACTIVE_ADMIN_CREATED_AT = Instant.parse("2026-01-01T10:02:00Z");
+  private static final Instant GUEST_CREATED_AT = Instant.parse("2026-01-01T10:03:00Z");
 
   @Autowired
   private MockMvc mockMvc;
@@ -57,6 +62,9 @@ class CustomerControllerTest {
 
   @Autowired
   private OrderRepository orderRepository;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
 
   private User adminUser;
   private User activeUser;
@@ -77,17 +85,18 @@ class CustomerControllerTest {
 
     adminUser = userRepository.findByEmail(ADMIN_EMAIL).orElseThrow();
     adminProfile = createProfile(adminUser, 50);
+    adminProfile = setCustomerTimestamps(adminProfile, ADMIN_CREATED_AT);
 
-    pause();
     activeUser = userRepository.findByEmail(USER_EMAIL).orElseThrow();
     activeProfile = createProfile(activeUser, 15);
+    activeProfile = setCustomerTimestamps(activeProfile, ACTIVE_CREATED_AT);
 
-    pause();
     inactiveAdminUser = createUser(INACTIVE_ADMIN_EMAIL, Role.ADMINISTRATOR, AccountStatus.INACTIVE);
     inactiveAdminProfile = createProfile(inactiveAdminUser, 120);
+    inactiveAdminProfile = setCustomerTimestamps(inactiveAdminProfile, INACTIVE_ADMIN_CREATED_AT);
 
-    pause();
     guestCustomer = createGuest("customer-guest@micromarket.dev");
+    guestCustomer = setCustomerTimestamps(guestCustomer, GUEST_CREATED_AT);
   }
 
   @Test
@@ -150,12 +159,9 @@ class CustomerControllerTest {
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_withCreatedAtRange_filtersCustomers() throws Exception {
-    Instant createdFrom = activeProfile.getCreatedAt().minusMillis(1);
-    Instant createdTo = activeProfile.getCreatedAt().plusMillis(1);
-
     mockMvc.perform(get("/customer")
-            .param("createdFrom", createdFrom.toString())
-            .param("createdTo", createdTo.toString()))
+            .param("createdFrom", ACTIVE_CREATED_AT.toString())
+            .param("createdTo", ACTIVE_CREATED_AT.toString()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
         .andExpect(jsonPath("$.content[0].id").value(activeProfile.getId().toString()));
@@ -259,12 +265,20 @@ class CustomerControllerTest {
     return guestRepository.saveAndFlush(guest);
   }
 
-  private void pause() {
-    try {
-      Thread.sleep(10);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new IllegalStateException("Interrupted while preparing test data", e);
-    }
+  private Profile setCustomerTimestamps(Profile profile, Instant createdAt) {
+    setCustomerTimestamps(profile.getId(), createdAt);
+    return profileRepository.findById(profile.getId()).orElseThrow();
+  }
+
+  private Guest setCustomerTimestamps(Guest guest, Instant createdAt) {
+    setCustomerTimestamps(guest.getId(), createdAt);
+    return guestRepository.findById(guest.getId()).orElseThrow();
+  }
+
+  private void setCustomerTimestamps(UUID customerId, Instant createdAt) {
+    jdbcTemplate.update(
+        "UPDATE customer SET created_at = ?, updated_at = ? WHERE id = ?",
+        createdAt, createdAt, customerId
+    );
   }
 }
