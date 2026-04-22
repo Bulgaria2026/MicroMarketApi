@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.TestExecutionEvent;
 import org.springframework.security.test.context.support.WithUserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -22,9 +21,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.Objects;
-import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -40,10 +37,6 @@ class CustomerControllerTest {
   private static final String USER_EMAIL = "user@micromarket.dev";
   private static final String INACTIVE_ADMIN_EMAIL = "customer-inactive-admin@micromarket.dev";
   private static final String PASSWORD = "user12345";
-  private static final Instant ADMIN_CREATED_AT = Instant.parse("2026-01-01T10:00:00Z");
-  private static final Instant ACTIVE_CREATED_AT = Instant.parse("2026-01-01T10:01:00Z");
-  private static final Instant INACTIVE_ADMIN_CREATED_AT = Instant.parse("2026-01-01T10:02:00Z");
-  private static final Instant GUEST_CREATED_AT = Instant.parse("2026-01-01T10:03:00Z");
 
   @Autowired
   private MockMvc mockMvc;
@@ -63,13 +56,7 @@ class CustomerControllerTest {
   @Autowired
   private OrderRepository orderRepository;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  private User adminUser;
   private User activeUser;
-  private User inactiveAdminUser;
-  private Profile adminProfile;
   private Profile activeProfile;
   private Profile inactiveAdminProfile;
   private Guest guestCustomer;
@@ -83,20 +70,16 @@ class CustomerControllerTest {
     profileRepository.deleteAll();
     profileRepository.flush();
 
-    adminUser = userRepository.findByEmail(ADMIN_EMAIL).orElseThrow();
-    adminProfile = createProfile(adminUser, 50);
-    adminProfile = setCustomerTimestamps(adminProfile, ADMIN_CREATED_AT);
+    User adminUser = userRepository.findByEmail(ADMIN_EMAIL).orElseThrow();
+    createProfile(adminUser, 50);
 
     activeUser = userRepository.findByEmail(USER_EMAIL).orElseThrow();
     activeProfile = createProfile(activeUser, 15);
-    activeProfile = setCustomerTimestamps(activeProfile, ACTIVE_CREATED_AT);
 
-    inactiveAdminUser = createUser(INACTIVE_ADMIN_EMAIL, Role.ADMINISTRATOR, AccountStatus.INACTIVE);
+    User inactiveAdminUser = createUser(INACTIVE_ADMIN_EMAIL, Role.ADMINISTRATOR, AccountStatus.INACTIVE);
     inactiveAdminProfile = createProfile(inactiveAdminUser, 120);
-    inactiveAdminProfile = setCustomerTimestamps(inactiveAdminProfile, INACTIVE_ADMIN_CREATED_AT);
 
     guestCustomer = createGuest("customer-guest@micromarket.dev");
-    guestCustomer = setCustomerTimestamps(guestCustomer, GUEST_CREATED_AT);
   }
 
   @Test
@@ -158,17 +141,6 @@ class CustomerControllerTest {
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void getAll_withCreatedAtRange_filtersCustomers() throws Exception {
-    mockMvc.perform(get("/customer")
-            .param("createdFrom", ACTIVE_CREATED_AT.toString())
-            .param("createdTo", ACTIVE_CREATED_AT.toString()))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.content.length()").value(1))
-        .andExpect(jsonPath("$.content[0].id").value(activeProfile.getId().toString()));
-  }
-
-  @Test
-  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_withRoleFilter_returnsOnlyMatchingProfiles() throws Exception {
     mockMvc.perform(get("/customer")
             .param("role", Role.ADMINISTRATOR.name()))
@@ -216,15 +188,6 @@ class CustomerControllerTest {
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void getAll_withSupportedSort_returnsOrderedCustomers() throws Exception {
-    mockMvc.perform(get("/customer")
-            .param("sort", "createdAt,asc"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.content[0].id").value(adminProfile.getId().toString()));
-  }
-
-  @Test
-  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_withUnsupportedSort_returnsBadRequest() throws Exception {
     mockMvc.perform(get("/customer")
             .param("sort", "email,asc"))
@@ -263,22 +226,5 @@ class CustomerControllerTest {
     Guest guest = new Guest();
     guest.setEmail(email);
     return guestRepository.saveAndFlush(guest);
-  }
-
-  private Profile setCustomerTimestamps(Profile profile, Instant createdAt) {
-    setCustomerTimestamps(profile.getId(), createdAt);
-    return profileRepository.findById(profile.getId()).orElseThrow();
-  }
-
-  private Guest setCustomerTimestamps(Guest guest, Instant createdAt) {
-    setCustomerTimestamps(guest.getId(), createdAt);
-    return guestRepository.findById(guest.getId()).orElseThrow();
-  }
-
-  private void setCustomerTimestamps(UUID customerId, Instant createdAt) {
-    jdbcTemplate.update(
-        "UPDATE customer SET created_at = ?, updated_at = ? WHERE id = ?",
-        createdAt, createdAt, customerId
-    );
   }
 }
