@@ -45,6 +45,9 @@ public class UserService {
     }
 
     if (dto.role() != null) {
+      if (!user.getRole().equals(dto.role())) {
+        refreshTokenService.revokeAllForUser(user.getId());
+      }
       user.setRole(dto.role());
     }
 
