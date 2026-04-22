@@ -128,8 +128,8 @@ class UserControllerTest {
                 {"role": "INVALID"}
                 """))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.title").value("Request Binding Failed"))
-        .andExpect(jsonPath("$.detail").value("Invalid value for 'role'. Allowed values: [ADMINISTRATOR, USER]"))
+        .andExpect(jsonPath("$.title").value("Bad Request"))
+        .andExpect(jsonPath("$.detail").value("Request body is malformed or contains invalid values."))
         .andExpect(jsonPath("$.instance").value("/user/" + userToUpdate.getId()));
   }
 
@@ -142,8 +142,8 @@ class UserControllerTest {
                 {"status": "WRONG"}
                 """))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.title").value("Request Binding Failed"))
-        .andExpect(jsonPath("$.detail").value("Invalid value for 'status'. Allowed values: [ACTIVE, INACTIVE]"))
+        .andExpect(jsonPath("$.title").value("Bad Request"))
+        .andExpect(jsonPath("$.detail").value("Request body is malformed or contains invalid values."))
         .andExpect(jsonPath("$.instance").value("/user/" + userToUpdate.getId()));
   }
 

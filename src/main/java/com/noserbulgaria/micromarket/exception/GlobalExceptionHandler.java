@@ -1,7 +1,5 @@
 package com.noserbulgaria.micromarket.exception;
 
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.TypeMismatchException;
@@ -23,17 +21,11 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.net.URI;
-import java.util.Arrays;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
-
-  private static final Pattern ENUM_VALUES_PATTERN = Pattern.compile("Enum class: \\[(.*)]");
-  private static final Pattern ENUM_TYPE_PATTERN = Pattern.compile("type `([^`]+)`");
 
   // --- Custom API exception handlers ---
 
@@ -122,8 +114,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   @Override
   protected @Nullable ResponseEntity<Object> handleHttpMessageNotReadable(
       HttpMessageNotReadableException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-    ProblemDetail pd = buildProblem(HttpStatus.BAD_REQUEST, "Request Binding Failed",
-        resolveMessageNotReadableDetail(ex), request);
+    ProblemDetail pd = buildProblem(HttpStatus.BAD_REQUEST, "Bad Request",
+        "Request body is malformed or contains invalid values.", request);
     return handleExceptionInternal(ex, pd, headers, status, request);
   }
 
@@ -151,63 +143,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     pd.setTitle(title);
     pd.setInstance(URI.create(requestPath(request)));
     return pd;
-  }
-
-  private String resolveMessageNotReadableDetail(HttpMessageNotReadableException ex) {
-    InvalidFormatException invalidFormatException = findCause(ex, InvalidFormatException.class);
-    if (invalidFormatException != null && invalidFormatException.getTargetType().isEnum()) {
-      String field = invalidFormatException.getPath().stream()
-          .map(JsonMappingException.Reference::getFieldName)
-          .filter(name -> name != null && !name.isBlank())
-          .reduce((_, second) -> second)
-          .orElse("value");
-      String allowedValues = Arrays.stream(invalidFormatException.getTargetType().getEnumConstants())
-          .map(String::valueOf)
-          .sorted()
-          .reduce((left, right) -> left + ", " + right)
-          .orElse("");
-      return "Invalid value for '%s'. Allowed values: [%s]".formatted(field, allowedValues);
-    }
-
-    String message = ex.getMessage();
-    if (message != null) {
-      Matcher matcher = ENUM_VALUES_PATTERN.matcher(message);
-      if (message.contains("Enum class") && matcher.find()) {
-        String field = resolveEnumFieldName(message);
-        String allowedValues = Arrays.stream(matcher.group(1).split(","))
-            .map(String::trim)
-            .sorted()
-            .reduce((left, right) -> left + ", " + right)
-            .orElse("");
-        return "Invalid value for '%s'. Allowed values: [%s]".formatted(field, allowedValues);
-      }
-    }
-
-    return message != null ? message : "Malformed JSON request body";
-  }
-
-  private <T extends Throwable> @Nullable T findCause(Throwable throwable, Class<T> type) {
-    Throwable current = throwable;
-    while (current != null) {
-      if (type.isInstance(current)) {
-        return type.cast(current);
-      }
-      current = current.getCause();
-    }
-    return null;
-  }
-
-  private String resolveEnumFieldName(String message) {
-    Matcher matcher = ENUM_TYPE_PATTERN.matcher(message);
-    if (!matcher.find()) {
-      return "value";
-    }
-
-    return switch (matcher.group(1)) {
-      case "com.noserbulgaria.micromarket.security.user.Role" -> "role";
-      case "com.noserbulgaria.micromarket.security.user.AccountStatus" -> "status";
-      default -> "value";
-    };
   }
 
   private String requestPath(WebRequest request) {

@@ -49,9 +49,7 @@ public class UserService {
     }
 
     if (dto.status() != null) {
-      if (dto.status() == AccountStatus.INACTIVE && user.getStatus() != AccountStatus.INACTIVE) {
-        refreshTokenService.revokeAllForUser(user.getId());
-      }
+      revokeAll(dto.status(), user);
       user.setStatus(dto.status());
     }
 
@@ -61,5 +59,11 @@ public class UserService {
   private User findUserByIdOrThrow(UUID id) {
     return userRepository.findById(id)
         .orElseThrow(() -> new NotFoundApiException("User with id '%s' not found".formatted(id)));
+  }
+
+  private void revokeAll(AccountStatus status, User user) {
+    if (status == AccountStatus.INACTIVE && user.getStatus() != AccountStatus.INACTIVE) {
+      refreshTokenService.revokeAllForUser(user.getId());
+    }
   }
 }

@@ -18,7 +18,7 @@ import java.util.Set;
 @Inheritance(strategy = InheritanceType.JOINED)
 @EqualsAndHashCode(callSuper = true)
 @SuppressWarnings("NullAway.Init")
-public class Customer extends ExtendedEntity {
+public abstract class Customer extends ExtendedEntity {
 
   @EqualsAndHashCode.Exclude
   @ToString.Exclude
