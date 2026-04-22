@@ -27,7 +27,7 @@ databaseChangeLog:
                   name: customer_id
                   type: uuid
               - column:
-                  name: stripe_payment_intent_id
+                  name: stripe_checkout_session_id
                   type: varchar(255)
               - column:
                   name: total_amount

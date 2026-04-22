@@ -53,9 +53,9 @@ public class Order extends ExtendedEntity {
   @Column(nullable = false)
   private String email;
 
-  /** Stripe PaymentIntent id ({@code pi_…}); used to find the order on webhook arrival and to issue refunds. */
+  /** Stripe Checkout Session id ({@code cs_…}); lookup key on webhook arrival. */
   @Column(unique = true)
-  private @Nullable String stripePaymentIntentId;
+  private @Nullable String stripeCheckoutSessionId;
 
   @Column(nullable = false, precision = 10, scale = 2)
   private BigDecimal totalAmount;

@@ -11,7 +11,6 @@ import jakarta.persistence.Table;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
-import org.jspecify.annotations.Nullable;
 
 @Data
 @Entity
@@ -29,12 +28,4 @@ public class Profile extends Customer {
 
   @Column(nullable = false)
   private int points;
-
-  /**
-   * PSP-side customer reference (e.g. Stripe Customer id). Lazily filled on first authenticated checkout so the
-   * Stripe dashboard shows a stable customer link instead of one-off PaymentIntents. Unblocks saved cards / Stripe
-   * Tax / dispute correlation later without a backfill.
-   */
-  @Column(name = "stripe_customer_id", unique = true, length = 64)
-  private @Nullable String stripeCustomerId;
 }

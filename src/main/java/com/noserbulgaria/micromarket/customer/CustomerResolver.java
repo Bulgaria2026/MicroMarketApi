@@ -16,12 +16,7 @@ public class CustomerResolver {
   private final ProfileRepository profileRepository;
   private final GuestRepository guestRepository;
 
-  /**
-   * Returns the Customer row that owns this checkout. Authenticated users get a lazily-created Profile linked to their
-   * User. Anonymous callers must provide an email; a Guest row is upserted on first use and reused thereafter. A
-   * unique-constraint race between two concurrent first-time callers is resolved by catching the integrity violation
-   * and re-fetching.
-   */
+  /** Upserts a Profile (authenticated) or Guest (by email); concurrent first-time inserts resolve via reload. */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public Customer resolveForCheckout(@Nullable CustomUserDetails userDetails, @Nullable String email) {
     if (userDetails != null) {

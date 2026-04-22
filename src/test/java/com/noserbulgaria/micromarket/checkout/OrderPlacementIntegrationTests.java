@@ -1,6 +1,8 @@
 package com.noserbulgaria.micromarket.checkout;
 
 import com.jayway.jsonpath.JsonPath;
+import com.noserbulgaria.micromarket.customer.Customer;
+import com.noserbulgaria.micromarket.customer.CustomerRepository;
 import com.noserbulgaria.micromarket.customer.Guest;
 import com.noserbulgaria.micromarket.customer.GuestRepository;
 import com.noserbulgaria.micromarket.customer.Profile;
@@ -12,7 +14,7 @@ import com.noserbulgaria.micromarket.order.OrderStatusType;
 import com.noserbulgaria.micromarket.product.Product;
 import com.noserbulgaria.micromarket.product.ProductRepository;
 import com.noserbulgaria.micromarket.exception.BadRequestApiException;
-import com.noserbulgaria.micromarket.payment.stripe.StripePaymentIntent;
+import com.noserbulgaria.micromarket.payment.stripe.StripeCheckoutSession;
 import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
 import com.noserbulgaria.micromarket.payment.stripe.StripeWebhookEvent;
 import com.noserbulgaria.micromarket.payment.stripe.event.StripeEventRepository;
@@ -44,9 +46,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -66,6 +70,7 @@ class OrderPlacementIntegrationTests {
   @Autowired private OrderRepository orderRepository;
   @Autowired private GuestRepository guestRepository;
   @Autowired private ProfileRepository profileRepository;
+  @Autowired private CustomerRepository customerRepository;
   @Autowired private StripeEventRepository stripeEventRepository;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private TransactionTemplate transactionTemplate;
@@ -81,17 +86,18 @@ class OrderPlacementIntegrationTests {
     orderRepository.deleteAll();
     profileRepository.deleteAll();
     guestRepository.deleteAll();
+    customerRepository.deleteAll();
     productRepository.deleteAll();
     userRepository.deleteAll();
 
     AtomicInteger customerCounter = new AtomicInteger();
     when(stripePaymentProvider.createCustomer(any()))
         .thenAnswer(inv -> "cus_fake_" + customerCounter.incrementAndGet());
-    when(stripePaymentProvider.initiate(any(), any(), any(), any()))
+    when(stripePaymentProvider.createCheckoutSession(any(), any()))
         .thenAnswer(inv -> {
-          UUID orderId = inv.getArgument(0);
-          String intentId = "pi_fake_" + orderId;
-          return new StripePaymentIntent(intentId, intentId + "_secret");
+          Order order = inv.getArgument(0);
+          String sessionId = "cs_fake_" + order.getId();
+          return new StripeCheckoutSession(sessionId, "https://checkout.stripe.test/" + sessionId);
         });
 
     User user = new User();
@@ -110,12 +116,13 @@ class OrderPlacementIntegrationTests {
     orderRepository.deleteAll();
     profileRepository.deleteAll();
     guestRepository.deleteAll();
+    customerRepository.deleteAll();
     productRepository.deleteAll();
     userRepository.deleteAll();
   }
 
   @Test
-  void guestCheckout_createsGuestAndPendingOrder() throws Exception {
+  void guestCheckout_createsGuestAndPendingOrderWithCheckoutSession() throws Exception {
     MvcResult result = mockMvc.perform(post("/order")
             .contentType(MediaType.APPLICATION_JSON)
             .content(body(sparklingWater.getId(), 2, "guest@example.com")))
@@ -123,7 +130,7 @@ class OrderPlacementIntegrationTests {
         .andExpect(jsonPath("$.orderId").isNotEmpty())
         .andExpect(jsonPath("$.orderNumber").value(org.hamcrest.Matchers.matchesRegex("^MM-\\d{6}$")))
         .andExpect(jsonPath("$.totalAmount").value(59.98))
-        .andExpect(jsonPath("$.clientSecret").isNotEmpty())
+        .andExpect(jsonPath("$.checkoutUrl").value(org.hamcrest.Matchers.startsWith("https://checkout.stripe.test/cs_fake_")))
         .andReturn();
 
     UUID orderId = UUID.fromString(JsonPath.read(result.getResponse().getContentAsString(), "$.orderId"));
@@ -132,7 +139,7 @@ class OrderPlacementIntegrationTests {
       assertThat(order.getOrderNumber()).matches("^MM-\\d{6}$");
       assertThat(order.getEmail()).isEqualTo("guest@example.com");
       assertThat(order.getStatus()).isEqualTo(OrderStatusType.PENDING_PAYMENT);
-      assertThat(order.getStripePaymentIntentId()).isNotNull();
+      assertThat(order.getStripeCheckoutSessionId()).isEqualTo("cs_fake_" + orderId);
       assertThat(order.getOrderItems()).hasSize(1);
       assertThat(order.getTotalAmount()).isEqualByComparingTo("59.98");
       OrderItem line = order.getOrderItems().iterator().next();
@@ -157,6 +164,22 @@ class OrderPlacementIntegrationTests {
             .content(body(sparklingWater.getId(), 1, "REPEAT@EXAMPLE.COM")))
         .andExpect(status().isCreated());
     assertThat(guestRepository.findAll()).hasSize(1);
+  }
+
+  @Test
+  void guestCheckout_twiceWithSameEmail_reusesSameStripeCustomerId() throws Exception {
+    placeOrderAsGuest(sparklingWater.getId(), 1, "stripe-reuse@example.com");
+    placeOrderAsGuest(sparklingWater.getId(), 1, "stripe-reuse@example.com");
+
+    Guest guest = guestRepository.findByEmailIgnoreCase("stripe-reuse@example.com").orElseThrow();
+    Customer reloaded = customerRepository.findById(guest.getId()).orElseThrow();
+    assertThat(reloaded.getStripeCustomerId()).isNotNull();
+
+    verify(stripePaymentProvider, times(1)).createCustomer("stripe-reuse@example.com");
+    ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+    verify(stripePaymentProvider, times(2)).createCheckoutSession(any(), captor.capture());
+    assertThat(captor.getAllValues())
+        .containsExactly(reloaded.getStripeCustomerId(), reloaded.getStripeCustomerId());
   }
 
   @Test
@@ -234,33 +257,45 @@ class OrderPlacementIntegrationTests {
   }
 
   @Test
-  void webhook_paymentSucceeded_marksOrderPaidAndDecrementsStock() throws Exception {
-    MvcResult result = placeOrderAsGuest(coffeeBeans.getId(), 2, "paid@example.com");
-    String intentId = orderRepository.findById(UUID.fromString(
-        JsonPath.read(result.getResponse().getContentAsString(), "$.orderId")))
-        .orElseThrow().getStripePaymentIntentId();
+  void webhook_checkoutSucceeded_marksOrderPaidCapturesPiIdAndDecrementsStock() throws Exception {
+    UUID orderId = placedOrderId(coffeeBeans.getId(), 2, "paid@example.com");
+    String sessionId = sessionIdFor(orderId);
 
-    stubSucceeded("evt_success_1", intentId);
+    stubCheckoutSucceeded("evt_success_1", sessionId, "pi_charge_ok");
     mockMvc.perform(post("/webhooks/stripe")
             .header(SIGNATURE_HEADER, "valid")
             .contentType(MediaType.APPLICATION_JSON)
             .content("{}"))
         .andExpect(status().isOk());
 
-    Order paid = orderRepository.findByStripePaymentIntentId(Objects.requireNonNull(intentId)).orElseThrow();
+    Order paid = orderRepository.findById(orderId).orElseThrow();
     assertThat(paid.getStatus()).isEqualTo(OrderStatusType.PAID);
     Product refreshed = productRepository.findById(coffeeBeans.getId()).orElseThrow();
     assertThat(refreshed.getAmount()).isEqualTo(3L);
   }
 
   @Test
-  void webhook_replayedEvent_isNoOp() throws Exception {
-    MvcResult result = placeOrderAsGuest(sparklingWater.getId(), 4, "replay@example.com");
-    String intentId = orderRepository.findById(UUID.fromString(
-        JsonPath.read(result.getResponse().getContentAsString(), "$.orderId")))
-        .orElseThrow().getStripePaymentIntentId();
+  void webhook_asyncPaymentSucceeded_marksOrderPaid() throws Exception {
+    UUID orderId = placedOrderId(sparklingWater.getId(), 1, "async@example.com");
+    String sessionId = sessionIdFor(orderId);
 
-    stubSucceeded("evt_dup", intentId);
+    stubCheckoutSucceeded("evt_async_ok", sessionId, "pi_async_ok");
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    Order paid = orderRepository.findById(orderId).orElseThrow();
+    assertThat(paid.getStatus()).isEqualTo(OrderStatusType.PAID);
+  }
+
+  @Test
+  void webhook_replayedSucceededEvent_isNoOp() throws Exception {
+    UUID orderId = placedOrderId(sparklingWater.getId(), 4, "replay@example.com");
+    String sessionId = sessionIdFor(orderId);
+
+    stubCheckoutSucceeded("evt_dup", sessionId, "pi_dup");
     mockMvc.perform(post("/webhooks/stripe")
             .header(SIGNATURE_HEADER, "valid")
             .contentType(MediaType.APPLICATION_JSON)
@@ -291,15 +326,14 @@ class OrderPlacementIntegrationTests {
 
   @Test
   void webhook_stockExhaustedBetweenCheckoutAndWebhook_cancelsOrderAndRefunds() throws Exception {
-    MvcResult result = placeOrderAsGuest(coffeeBeans.getId(), 2, "race@example.com");
-    UUID orderId = UUID.fromString(JsonPath.read(result.getResponse().getContentAsString(), "$.orderId"));
-    String intentId = orderRepository.findById(orderId).orElseThrow().getStripePaymentIntentId();
+    UUID orderId = placedOrderId(coffeeBeans.getId(), 2, "race@example.com");
+    String sessionId = sessionIdFor(orderId);
 
     Product product = productRepository.findById(coffeeBeans.getId()).orElseThrow();
     product.setAmount(0L);
     productRepository.saveAndFlush(product);
 
-    stubSucceeded("evt_race", intentId);
+    stubCheckoutSucceeded("evt_race", sessionId, "pi_race");
     mockMvc.perform(post("/webhooks/stripe")
             .header(SIGNATURE_HEADER, "valid")
             .contentType(MediaType.APPLICATION_JSON)
@@ -311,16 +345,15 @@ class OrderPlacementIntegrationTests {
 
     ArgumentCaptor<String> refundCaptor = ArgumentCaptor.forClass(String.class);
     verify(stripePaymentProvider).refund(refundCaptor.capture());
-    assertThat(refundCaptor.getValue()).isEqualTo(intentId);
+    assertThat(refundCaptor.getValue()).isEqualTo("pi_race");
   }
 
   @Test
-  void webhook_paymentFailed_marksOrderPaymentFailed() throws Exception {
-    MvcResult result = placeOrderAsGuest(sparklingWater.getId(), 1, "fail@example.com");
-    UUID orderId = UUID.fromString(JsonPath.read(result.getResponse().getContentAsString(), "$.orderId"));
-    String intentId = orderRepository.findById(orderId).orElseThrow().getStripePaymentIntentId();
+  void webhook_checkoutFailed_marksOrderPaymentFailed() throws Exception {
+    UUID orderId = placedOrderId(sparklingWater.getId(), 1, "fail@example.com");
+    String sessionId = sessionIdFor(orderId);
 
-    stubFailed("evt_fail_1", intentId);
+    stubCheckoutFailed("evt_fail_1", sessionId);
     mockMvc.perform(post("/webhooks/stripe")
             .header(SIGNATURE_HEADER, "valid")
             .contentType(MediaType.APPLICATION_JSON)
@@ -331,6 +364,48 @@ class OrderPlacementIntegrationTests {
     assertThat(failed.getStatus()).isEqualTo(OrderStatusType.PAYMENT_FAILED);
     Product refreshed = productRepository.findById(sparklingWater.getId()).orElseThrow();
     assertThat(refreshed.getAmount()).isEqualTo(100L);
+  }
+
+  @Test
+  void webhook_checkoutExpired_marksOrderCancelled() throws Exception {
+    UUID orderId = placedOrderId(sparklingWater.getId(), 1, "expired@example.com");
+    String sessionId = sessionIdFor(orderId);
+
+    stubCheckoutExpired("evt_expired", sessionId);
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    Order cancelled = orderRepository.findById(orderId).orElseThrow();
+    assertThat(cancelled.getStatus()).isEqualTo(OrderStatusType.CANCELLED);
+    verify(stripePaymentProvider, never()).refund(any());
+    Product refreshed = productRepository.findById(sparklingWater.getId()).orElseThrow();
+    assertThat(refreshed.getAmount()).isEqualTo(100L);
+  }
+
+  @Test
+  void webhook_checkoutExpiredAfterPaid_isNoOp() throws Exception {
+    UUID orderId = placedOrderId(sparklingWater.getId(), 1, "late-expire@example.com");
+    String sessionId = sessionIdFor(orderId);
+
+    stubCheckoutSucceeded("evt_paid_first", sessionId, "pi_paid_first");
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    stubCheckoutExpired("evt_expired_late", sessionId);
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    Order order = orderRepository.findById(orderId).orElseThrow();
+    assertThat(order.getStatus()).isEqualTo(OrderStatusType.PAID);
   }
 
   @Test
@@ -352,27 +427,17 @@ class OrderPlacementIntegrationTests {
     assertThat(profile.getStripeCustomerId()).isNotNull();
 
     ArgumentCaptor<String> customerCaptor = ArgumentCaptor.forClass(String.class);
-    verify(stripePaymentProvider, times(2)).initiate(any(), any(), any(), customerCaptor.capture());
+    verify(stripePaymentProvider, times(2)).createCheckoutSession(any(), customerCaptor.capture());
     assertThat(customerCaptor.getAllValues())
         .containsExactly(profile.getStripeCustomerId(), profile.getStripeCustomerId());
   }
 
   @Test
-  void guestCheckout_initiatesPaymentWithoutStripeCustomer() throws Exception {
-    placeOrderAsGuest(sparklingWater.getId(), 1, "anon@example.com");
+  void webhook_checkoutSucceeded_writesEnversRevisionForTransition() throws Exception {
+    UUID orderId = placedOrderId(sparklingWater.getId(), 1, "envers@example.com");
+    String sessionId = sessionIdFor(orderId);
 
-    ArgumentCaptor<String> customerCaptor = ArgumentCaptor.forClass(String.class);
-    verify(stripePaymentProvider).initiate(any(), any(), any(), customerCaptor.capture());
-    assertThat(customerCaptor.getValue()).isNull();
-  }
-
-  @Test
-  void webhook_paymentSucceeded_writesEnversRevisionForTransition() throws Exception {
-    MvcResult result = placeOrderAsGuest(sparklingWater.getId(), 1, "envers@example.com");
-    UUID orderId = UUID.fromString(JsonPath.read(result.getResponse().getContentAsString(), "$.orderId"));
-    String intentId = orderRepository.findById(orderId).orElseThrow().getStripePaymentIntentId();
-
-    stubSucceeded("evt_envers", intentId);
+    stubCheckoutSucceeded("evt_envers", sessionId, "pi_envers");
     mockMvc.perform(post("/webhooks/stripe")
             .header(SIGNATURE_HEADER, "valid")
             .contentType(MediaType.APPLICATION_JSON)
@@ -387,14 +452,48 @@ class OrderPlacementIntegrationTests {
     });
   }
 
-  private void stubSucceeded(String eventId, String paymentIntentId) {
-    when(stripePaymentProvider.verifyAndParse(any(), eq("valid")))
-        .thenReturn(Optional.of(new StripeWebhookEvent.PaymentSucceeded(eventId, paymentIntentId)));
+  @Test
+  void checkoutStatus_returnsOrderStateForSession() throws Exception {
+    UUID orderId = placedOrderId(sparklingWater.getId(), 1, "status@example.com");
+    String sessionId = sessionIdFor(orderId);
+    String orderNumber = orderRepository.findById(orderId).orElseThrow().getOrderNumber();
+
+    mockMvc.perform(get("/checkout/sessions/{sessionId}/status", sessionId))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.orderNumber").value(orderNumber))
+        .andExpect(jsonPath("$.status").value("PENDING_PAYMENT"));
+
+    stubCheckoutSucceeded("evt_status", sessionId, "pi_status");
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    mockMvc.perform(get("/checkout/sessions/{sessionId}/status", sessionId))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("PAID"));
   }
 
-  private void stubFailed(String eventId, String paymentIntentId) {
+  @Test
+  void checkoutStatus_unknownSessionId_returnsNotFound() throws Exception {
+    mockMvc.perform(get("/checkout/sessions/{sessionId}/status", "cs_bogus"))
+        .andExpect(status().isNotFound());
+  }
+
+  private void stubCheckoutSucceeded(String eventId, String sessionId, String paymentIntentId) {
     when(stripePaymentProvider.verifyAndParse(any(), eq("valid")))
-        .thenReturn(Optional.of(new StripeWebhookEvent.PaymentFailed(eventId, paymentIntentId)));
+        .thenReturn(Optional.of(new StripeWebhookEvent.CheckoutSucceeded(eventId, sessionId, paymentIntentId)));
+  }
+
+  private void stubCheckoutFailed(String eventId, String sessionId) {
+    when(stripePaymentProvider.verifyAndParse(any(), eq("valid")))
+        .thenReturn(Optional.of(new StripeWebhookEvent.CheckoutFailed(eventId, sessionId)));
+  }
+
+  private void stubCheckoutExpired(String eventId, String sessionId) {
+    when(stripePaymentProvider.verifyAndParse(any(), eq("valid")))
+        .thenReturn(Optional.of(new StripeWebhookEvent.CheckoutExpired(eventId, sessionId)));
   }
 
   private Product product(String name, BigDecimal price, int discount, boolean enabled, long amount) {
@@ -425,6 +524,16 @@ class OrderPlacementIntegrationTests {
             .content(body(productId, quantity, email)))
         .andExpect(status().isCreated())
         .andReturn();
+  }
+
+  private UUID placedOrderId(UUID productId, int quantity, String email) throws Exception {
+    MvcResult result = placeOrderAsGuest(productId, quantity, email);
+    return UUID.fromString(JsonPath.read(result.getResponse().getContentAsString(), "$.orderId"));
+  }
+
+  private String sessionIdFor(UUID orderId) {
+    return Objects.requireNonNull(
+        orderRepository.findById(orderId).orElseThrow().getStripeCheckoutSessionId());
   }
 
   private String accessTokenFor(String email, String password) throws Exception {

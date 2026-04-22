@@ -19,7 +19,7 @@ public record OrderResponse(
 
     String email,
 
-    @Nullable String stripePaymentIntentId,
+    @Nullable String stripeCheckoutSessionId,
 
     BigDecimal totalAmount,
 

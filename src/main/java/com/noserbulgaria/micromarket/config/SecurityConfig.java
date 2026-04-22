@@ -51,7 +51,8 @@ public class SecurityConfig {
   private static final String[] PUBLIC_GET_ENDPOINTS = {
       "/product",
       "/product/{id}",
-      "/product/{id}/history"
+      "/product/{id}/history",
+      "/checkout/sessions/{sessionId}/status"
   };
 
   private static final String[] PUBLIC_POST_ENDPOINTS = {

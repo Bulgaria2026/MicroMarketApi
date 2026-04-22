@@ -5,10 +5,7 @@ import com.noserbulgaria.micromarket.payment.stripe.event.StripeEventStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/**
- * Orchestrates Stripe webhook intake: signature verification, dedup-with-rollback-on-failure, and dispatch to the
- * order-side settlement use case.
- */
+/** Webhook intake: verify signature, dedup via {@link StripeEventStore}, dispatch exhaustively over the sealed event. */
 @Service
 @RequiredArgsConstructor
 public class StripeWebhookService {
@@ -24,8 +21,10 @@ public class StripeWebhookService {
 
   private void dispatch(StripeWebhookEvent event) {
     switch (event) {
-      case StripeWebhookEvent.PaymentSucceeded p -> orderSettlementService.handlePaymentSucceeded(p.paymentIntentId());
-      case StripeWebhookEvent.PaymentFailed p -> orderSettlementService.handlePaymentFailed(p.paymentIntentId());
+      case StripeWebhookEvent.CheckoutSucceeded e ->
+          orderSettlementService.handleCheckoutSucceeded(e.sessionId(), e.paymentIntentId());
+      case StripeWebhookEvent.CheckoutFailed e -> orderSettlementService.handleCheckoutFailed(e.sessionId());
+      case StripeWebhookEvent.CheckoutExpired e -> orderSettlementService.handleCheckoutExpired(e.sessionId());
     }
   }
 }

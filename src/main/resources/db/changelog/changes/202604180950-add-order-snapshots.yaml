@@ -127,18 +127,3 @@ databaseChangeLog:
         - dropDefaultValue:
             tableName: order_item
             columnName: original_unit_price
-
-  - changeSet:
-      id: 202604180950-9
-      author: Lon60
-      changes:
-        - addColumn:
-            tableName: profile
-            columns:
-              - column:
-                  name: stripe_customer_id
-                  type: varchar(64)
-                  constraints:
-                    nullable: true
-                    unique: true
-                    uniqueConstraintName: uk_profile_stripe_customer_id

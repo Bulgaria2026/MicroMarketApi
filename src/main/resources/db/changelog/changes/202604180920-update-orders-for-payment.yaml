@@ -47,12 +47,12 @@ databaseChangeLog:
             tableName: orders
             columns:
               - column:
-                  name: stripe_payment_intent_id
+                  name: stripe_checkout_session_id
                   type: varchar(255)
                   constraints:
                     nullable: true
                     unique: true
-                    uniqueConstraintName: uk_order_stripe_payment_intent_id
+                    uniqueConstraintName: uk_order_stripe_checkout_session_id
               - column:
                   name: total_amount
                   type: decimal(10,2)

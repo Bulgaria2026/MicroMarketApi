@@ -1,33 +1,42 @@
 package com.noserbulgaria.micromarket.payment.stripe;
 
 import com.noserbulgaria.micromarket.exception.BadRequestApiException;
+import com.noserbulgaria.micromarket.order.Order;
+import com.noserbulgaria.micromarket.order.OrderItem;
 import com.stripe.StripeClient;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
-import com.stripe.model.PaymentIntent;
 import com.stripe.model.StripeObject;
+import com.stripe.model.checkout.Session;
 import com.stripe.net.RequestOptions;
 import com.stripe.param.CustomerCreateParams;
-import com.stripe.param.PaymentIntentCreateParams;
 import com.stripe.param.RefundCreateParams;
+import com.stripe.param.checkout.SessionCreateParams;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
-import java.util.UUID;
 
+/** Facade over the Stripe SDK. EUR-only; amounts serialized as integer cents. */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class StripePaymentProvider {
 
-  private static final String EVENT_PAYMENT_SUCCEEDED = "payment_intent.succeeded";
-  private static final String EVENT_PAYMENT_FAILED = "payment_intent.payment_failed";
+  public static final String CURRENCY = "eur";
+
+  private static final String EVENT_CHECKOUT_COMPLETED = "checkout.session.completed";
+  private static final String EVENT_CHECKOUT_ASYNC_SUCCEEDED = "checkout.session.async_payment_succeeded";
+  private static final String EVENT_CHECKOUT_ASYNC_FAILED = "checkout.session.async_payment_failed";
+  private static final String EVENT_CHECKOUT_EXPIRED = "checkout.session.expired";
+
+  private static final String PAYMENT_STATUS_PAID = "paid";
+  private static final String PAYMENT_STATUS_NO_PAYMENT_REQUIRED = "no_payment_required";
+  private static final String PAYMENT_STATUS_UNPAID = "unpaid";
 
   private final StripeClient stripeClient;
   private final StripeProperties properties;
@@ -44,40 +53,46 @@ public class StripePaymentProvider {
     }
   }
 
-  public StripePaymentIntent initiate(
-      UUID orderId,
-      BigDecimal amount,
-      String currency,
-      @Nullable String stripeCustomerId
-  ) {
-    PaymentIntentCreateParams.Builder builder = PaymentIntentCreateParams.builder()
-        .setAmount(toMinorUnits(amount))
-        .setCurrency(currency.toLowerCase())
-        .putMetadata("order_id", orderId.toString())
-        .setAutomaticPaymentMethods(
-            PaymentIntentCreateParams.AutomaticPaymentMethods.builder()
-                .setEnabled(true)
-                .build()
-        );
-    if (stripeCustomerId != null) {
-      builder.setCustomer(stripeCustomerId);
+  /** Idempotency-keyed on the order id, so a retried placement returns the same session instead of duplicating. */
+  public StripeCheckoutSession createCheckoutSession(Order order, String stripeCustomerId) {
+    SessionCreateParams.Builder builder = SessionCreateParams.builder()
+        .setMode(SessionCreateParams.Mode.PAYMENT)
+        .setCustomer(stripeCustomerId)
+        .setClientReferenceId(order.getId().toString())
+        .putMetadata("order_id", order.getId().toString())
+        .setSuccessUrl(properties.successUrl())
+        .setCancelUrl(properties.cancelUrl())
+        .setExpiresAt(Instant.now().plus(Duration.ofMinutes(properties.sessionExpirationMinutes())).getEpochSecond());
+
+    for (OrderItem item : order.getOrderItems()) {
+      builder.addLineItem(
+          SessionCreateParams.LineItem.builder()
+              .setQuantity((long) item.getQuantity())
+              .setPriceData(
+                  SessionCreateParams.LineItem.PriceData.builder()
+                      .setCurrency(CURRENCY)
+                      .setUnitAmount(item.getPriceAtPurchase().movePointRight(2).longValueExact())
+                      .setProductData(
+                          SessionCreateParams.LineItem.PriceData.ProductData.builder()
+                              .setName(item.getProductName())
+                              .build())
+                      .build())
+              .build());
     }
+
     RequestOptions options = RequestOptions.builder()
-        .setIdempotencyKey(orderId.toString())
+        .setIdempotencyKey(order.getId().toString())
         .build();
     try {
-      PaymentIntent intent = stripeClient.v1().paymentIntents().create(builder.build(), options);
-      return new StripePaymentIntent(intent.getId(), intent.getClientSecret());
+      Session session = stripeClient.v1().checkout().sessions().create(builder.build(), options);
+      return new StripeCheckoutSession(session.getId(), session.getUrl());
     } catch (StripeException ex) {
       throw new IllegalStateException(
-          "Failed to create Stripe payment intent for order %s".formatted(orderId), ex);
+          "Failed to create Stripe Checkout session for order %s".formatted(order.getId()), ex);
     }
   }
 
-  /**
-   * Best-effort refund. A failure here is logged at ERROR for operational alerting but not thrown: by the time we
-   * refund, the order is already in {@code CANCELLED} and the customer's money is still on Stripe's side
-   */
+  /** Best-effort: logs failures but doesn't throw, so a Stripe outage can't roll back the CANCELLED transition. */
   public void refund(String paymentIntentId) {
     RefundCreateParams params = RefundCreateParams.builder()
         .setPaymentIntent(paymentIntentId)
@@ -89,10 +104,7 @@ public class StripePaymentProvider {
     }
   }
 
-  /**
-   * Verifies the webhook signature and parses the event. Returns empty when the event type is one we don't handle —
-   * callers ack those with 200 and move on. For handled types the result carries a non-null payment intent id.
-   */
+  /** Empty = ignored event (ack with 200). Throws {@link BadRequestApiException} on bad signature so Stripe retries. */
   public Optional<StripeWebhookEvent> verifyAndParse(String payload, String signatureHeader) {
     Event event;
     try {
@@ -101,10 +113,20 @@ public class StripePaymentProvider {
       throw new BadRequestApiException("Invalid Stripe webhook signature");
     }
     return switch (event.getType()) {
-      case EVENT_PAYMENT_SUCCEEDED -> Optional.of(
-          new StripeWebhookEvent.PaymentSucceeded(event.getId(), extractPaymentIntentId(event)));
-      case EVENT_PAYMENT_FAILED -> Optional.of(
-          new StripeWebhookEvent.PaymentFailed(event.getId(), extractPaymentIntentId(event)));
+      case EVENT_CHECKOUT_COMPLETED -> parseCompleted(event);
+      case EVENT_CHECKOUT_ASYNC_SUCCEEDED -> {
+        Session session = extractSession(event);
+        yield Optional.of(new StripeWebhookEvent.CheckoutSucceeded(
+            event.getId(), session.getId(), session.getPaymentIntent()));
+      }
+      case EVENT_CHECKOUT_ASYNC_FAILED -> {
+        Session session = extractSession(event);
+        yield Optional.of(new StripeWebhookEvent.CheckoutFailed(event.getId(), session.getId()));
+      }
+      case EVENT_CHECKOUT_EXPIRED -> {
+        Session session = extractSession(event);
+        yield Optional.of(new StripeWebhookEvent.CheckoutExpired(event.getId(), session.getId()));
+      }
       default -> {
         log.debug("Ignoring Stripe event {} of unhandled type {}", event.getId(), event.getType());
         yield Optional.empty();
@@ -112,18 +134,34 @@ public class StripePaymentProvider {
     };
   }
 
-  private String extractPaymentIntentId(Event event) {
+  /** Async methods (bank transfers etc.) complete with payment_status=unpaid; wait for the async follow-up instead. */
+  private Optional<StripeWebhookEvent> parseCompleted(Event event) {
+    Session session = extractSession(event);
+    String paymentStatus = session.getPaymentStatus();
+    return switch (paymentStatus) {
+      case PAYMENT_STATUS_PAID, PAYMENT_STATUS_NO_PAYMENT_REQUIRED -> Optional.of(
+          new StripeWebhookEvent.CheckoutSucceeded(event.getId(), session.getId(), session.getPaymentIntent()));
+      case PAYMENT_STATUS_UNPAID -> {
+        log.debug("Checkout session {} completed with payment_status=unpaid — waiting for async outcome",
+            session.getId());
+        yield Optional.empty();
+      }
+      default -> {
+        log.warn("Checkout session {} completed with unexpected payment_status={}",
+            session.getId(), paymentStatus);
+        yield Optional.empty();
+      }
+    };
+  }
+
+  private Session extractSession(Event event) {
     StripeObject data = event.getDataObjectDeserializer().getObject()
         .orElseThrow(() -> new IllegalStateException(
             "Stripe event %s has no deserializable data object".formatted(event.getId())));
-    if (!(data instanceof PaymentIntent intent)) {
+    if (!(data instanceof Session session)) {
       throw new IllegalStateException(
-          "Stripe event %s of type %s did not carry a PaymentIntent".formatted(event.getId(), event.getType()));
+          "Stripe event %s of type %s did not carry a Checkout Session".formatted(event.getId(), event.getType()));
     }
-    return intent.getId();
-  }
-
-  private static long toMinorUnits(BigDecimal amount) {
-    return amount.setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValueExact();
+    return session;
   }
 }

@@ -12,5 +12,5 @@ public interface OrderRepository extends
     JpaSpecificationExecutor<Order>,
     RevisionRepository<Order, UUID, Integer> {
 
-  Optional<Order> findByStripePaymentIntentId(String stripePaymentIntentId);
+  Optional<Order> findByStripeCheckoutSessionId(String stripeCheckoutSessionId);
 }

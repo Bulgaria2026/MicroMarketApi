@@ -18,6 +18,13 @@ databaseChangeLog:
                   constraints:
                     nullable: false
               - column:
+                  name: stripe_customer_id
+                  type: varchar(255)
+                  constraints:
+                    nullable: true
+                    unique: true
+                    uniqueConstraintName: uk_customer_stripe_customer_id
+              - column:
                   name: created_at
                   type: timestamp
                   constraints:

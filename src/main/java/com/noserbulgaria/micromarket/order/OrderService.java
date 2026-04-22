@@ -29,9 +29,9 @@ public class OrderService {
         .map(orderMapper::toDto);
   }
 
-  public Order findByStripePaymentIntentIdOrThrow(String stripePaymentIntentId) {
-    return orderRepository.findByStripePaymentIntentId(stripePaymentIntentId)
+  public Order findByStripeCheckoutSessionIdOrThrow(String stripeCheckoutSessionId) {
+    return orderRepository.findByStripeCheckoutSessionId(stripeCheckoutSessionId)
         .orElseThrow(() -> new NotFoundApiException(
-            "Order with Stripe payment intent id '%s' not found".formatted(stripePaymentIntentId)));
+            "Order with Stripe Checkout session id '%s' not found".formatted(stripeCheckoutSessionId)));
   }
 }
