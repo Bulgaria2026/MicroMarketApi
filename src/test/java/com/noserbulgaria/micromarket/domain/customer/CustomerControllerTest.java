@@ -150,11 +150,12 @@ class CustomerControllerTest {
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_withCreatedAtRange_filtersCustomers() throws Exception {
-    Instant to = activeProfile.getCreatedAt();
+    Instant createdFrom = activeProfile.getCreatedAt().minusMillis(1);
+    Instant createdTo = activeProfile.getCreatedAt().plusMillis(1);
 
     mockMvc.perform(get("/customer")
-            .param("createdFrom", activeProfile.getCreatedAt().toString())
-            .param("createdTo", to.toString()))
+            .param("createdFrom", createdFrom.toString())
+            .param("createdTo", createdTo.toString()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
         .andExpect(jsonPath("$.content[0].id").value(activeProfile.getId().toString()));
