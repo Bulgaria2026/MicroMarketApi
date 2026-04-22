@@ -1,5 +1,6 @@
 package com.noserbulgaria.micromarket.domain.order;
 
+import com.noserbulgaria.micromarket.domain.order.dto.OrderDetailResponseDto;
 import com.noserbulgaria.micromarket.domain.order.dto.OrderMapper;
 import com.noserbulgaria.micromarket.domain.order.dto.OrderResponseDto;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
@@ -20,9 +21,9 @@ public class OrderService {
   private final OrderRepository orderRepository;
   private final OrderMapper orderMapper;
 
-  public OrderResponseDto findByIdOrThrow(UUID id) {
+  public OrderDetailResponseDto findByIdOrThrow(UUID id) {
     return orderRepository.findById(id)
-        .map(orderMapper::toDto)
+        .map(orderMapper::toDetailDto)
         .orElseThrow(() -> new NotFoundApiException("Order with id '%s' not found".formatted(id)));
   }
 
