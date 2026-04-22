@@ -20,6 +20,8 @@ databaseChangeLog:
               - column:
                   name: updated_at
                   type: timestamp
+                  constraints:
+                    nullable: false
         - sql:
             sql: |
               INSERT INTO customer (id, created_at, updated_at)
