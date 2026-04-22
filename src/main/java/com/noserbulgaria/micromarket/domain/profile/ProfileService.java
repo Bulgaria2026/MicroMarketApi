@@ -8,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -21,7 +20,7 @@ public class ProfileService {
 
   @Transactional(readOnly = true)
   public ProfileResponseDto getByIdOrThrow(UUID id) {
-    return profileMapper.toDto( profileRepository.findById(id)
+    return profileMapper.toDto(profileRepository.findById(id)
         .orElseThrow((() -> new NotFoundApiException("Profile with id '%s' not found".formatted(id)))));
   }
 
@@ -36,10 +35,5 @@ public class ProfileService {
         .orElseThrow(() -> new NotFoundApiException("Profile with id '%s' not found".formatted(id)));
     profileMapper.update(request, profile);
     return profileMapper.toDto(profileRepository.save(profile));
-  }
-
-  @Transactional(readOnly = true)
-  public Optional<Profile> getById(UUID id) {
-    return profileRepository.findById(id);
   }
 }

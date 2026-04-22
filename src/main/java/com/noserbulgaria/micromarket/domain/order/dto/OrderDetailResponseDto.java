@@ -1,0 +1,24 @@
+package com.noserbulgaria.micromarket.domain.order.dto;
+
+import com.noserbulgaria.micromarket.domain.order.OrderStatusType;
+
+import java.time.Instant;
+import java.util.Set;
+import java.util.UUID;
+
+public record OrderDetailResponseDto(
+
+    UUID id,
+
+    OrderStatusType status,
+
+    UUID customerId,
+
+    Set<OrderItemDetailResponseDto> orderItems,
+
+    Instant createdAt,
+
+    Instant updatedAt
+
+) {
+}
