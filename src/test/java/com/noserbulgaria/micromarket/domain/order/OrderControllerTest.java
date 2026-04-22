@@ -113,7 +113,7 @@ class OrderControllerTest {
         .andExpect(jsonPath("$.id").value(testOrder.getId().toString()))
         .andExpect(jsonPath("$.orderItems").isArray())
         .andExpect(jsonPath("$.orderItems.length()").value(1))
-        .andExpect(jsonPath("$.orderItems[0].productId").value(testProduct.getId().toString()))
+        .andExpect(jsonPath("$.orderItems[0].product.id").value(testProduct.getId().toString()))
         .andExpect(jsonPath("$.orderItems[0].quantity").value(2))
         .andExpect(jsonPath("$.orderItems[0].priceAtPurchase").value(10.5));
   }
