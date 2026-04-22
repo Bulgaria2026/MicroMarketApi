@@ -1,5 +1,6 @@
 package com.noserbulgaria.micromarket.domain.order;
 
+import com.noserbulgaria.micromarket.domain.order.dto.OrderDetailResponseDto;
 import com.noserbulgaria.micromarket.domain.order.dto.OrderResponseDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -41,7 +42,7 @@ public class OrderController {
   @ApiResponse(responseCode = "404", description = "Order not found")
   @ApiResponse(responseCode = "401", description = "Unauthorized, authentication required")
   @ApiResponse(responseCode = "403", description = "Forbidden, insufficient permissions")
-  public OrderResponseDto findById(@PathVariable UUID id) {
+  public OrderDetailResponseDto findById(@PathVariable UUID id) {
     return orderService.findByIdOrThrow(id);
   }
 }
