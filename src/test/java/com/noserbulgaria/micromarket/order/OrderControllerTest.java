@@ -119,7 +119,7 @@ class OrderControllerTest {
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getOrdersAsAdministrator_returnsOk() throws Exception {
-    mockMvc.perform(get("/order").param("customerId", testProfile.getId().toString()))
+    mockMvc.perform(get("/order"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()))
         .andExpect(jsonPath("$.content[0].orderNumber").value("MM-T00001"))
@@ -133,6 +133,42 @@ class OrderControllerTest {
         .andExpect(jsonPath("$.content[0].orderItems[0].quantity").value(2))
         .andExpect(jsonPath("$.content[0].orderItems[0].originalUnitPrice").value(10.5))
         .andExpect(jsonPath("$.content[0].orderItems[0].priceAtPurchase").value(10.5));
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void getOrdersAsAdministrator_withOrderNumberFilter_returnsFiltered() throws Exception {
+    Order other = Order.builder()
+        .orderNumber("MM-X99999")
+        .status(OrderStatusType.PAID)
+        .customer(testProfile)
+        .email("other@test.local")
+        .totalAmount(new BigDecimal("5.00"))
+        .build();
+    orderRepository.saveAndFlush(other);
+
+    mockMvc.perform(get("/order").param("orderNumber", "t00001"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].orderNumber").value("MM-T00001"));
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void getOrdersAsAdministrator_withEmailFilter_returnsFiltered() throws Exception {
+    Order other = Order.builder()
+        .orderNumber("MM-X99999")
+        .status(OrderStatusType.PAID)
+        .customer(testProfile)
+        .email("someone@elsewhere.com")
+        .totalAmount(new BigDecimal("5.00"))
+        .build();
+    orderRepository.saveAndFlush(other);
+
+    mockMvc.perform(get("/order").param("email", "TEST.LOCAL"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].email").value("admin@test.local"));
   }
 
   @Test
@@ -167,7 +203,6 @@ class OrderControllerTest {
     orderRepository.saveAndFlush(filteredOut);
 
     mockMvc.perform(get("/order")
-            .param("customerId", testProfile.getId().toString())
             .param("status", OrderStatusType.PENDING_PAYMENT.name()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
