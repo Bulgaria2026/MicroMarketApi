@@ -1,5 +1,6 @@
 package com.noserbulgaria.micromarket.order;
 
+import com.noserbulgaria.micromarket.customer.ProfileRepository;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -17,6 +18,7 @@ public class OrderService {
 
   private final OrderRepository orderRepository;
   private final OrderMapper orderMapper;
+  private final ProfileRepository profileRepository;
 
   public OrderResponse findByIdOrThrow(UUID id) {
     return orderRepository.findById(id)
@@ -27,6 +29,14 @@ public class OrderService {
   public Page<OrderResponse> findAll(Specification<Order> spec, Pageable pageable) {
     return orderRepository.findAll(spec, pageable)
         .map(orderMapper::toDto);
+  }
+
+  public Page<OrderResponse> findOwnOrders(UUID userId, OwnOrderFilter filter, Pageable pageable) {
+    return profileRepository.findByUserId(userId)
+        .map(profile -> orderRepository
+            .findAll(OrderSpecification.forCustomer(profile.getId(), filter), pageable)
+            .map(orderMapper::toDto))
+        .orElseGet(Page::empty);
   }
 
   public Order findByStripeCheckoutSessionIdOrThrow(String stripeCheckoutSessionId) {

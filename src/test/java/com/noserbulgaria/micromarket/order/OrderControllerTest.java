@@ -20,6 +20,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -185,5 +187,70 @@ class OrderControllerTest {
         .andExpect(jsonPath("$.status").value(404))
         .andExpect(jsonPath("$.detail").value("Order with id '%s' not found".formatted(orderId)))
         .andExpect(jsonPath("$.instance").value("/order/" + orderId));
+  }
+
+  @Test
+  void getOwnOrdersAsAnonymous_returnsUnauthorized() throws Exception {
+    mockMvc.perform(get("/order/own")).andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  @WithUserDetails(value = CUSTOMER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void getOwnOrdersAsCustomer_returnsOwnOrder() throws Exception {
+    mockMvc.perform(get("/order/own"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()))
+        .andExpect(jsonPath("$.content[0].orderNumber").value("MM-T00001"))
+        .andExpect(jsonPath("$.content[0].customerId").value(testProfile.getId().toString()))
+        .andExpect(jsonPath("$.content[0].totalAmount").value(21.00))
+        .andExpect(jsonPath("$.content[0].orderItems.length()").value(1))
+        .andExpect(jsonPath("$.content[0].orderItems[0].productId").value(testProduct.getId().toString()))
+        .andExpect(jsonPath("$.content[0].orderItems[0].productName").value("Cola"))
+        .andExpect(jsonPath("$.content[0].orderItems[0].quantity").value(2))
+        .andExpect(jsonPath("$.content[0].orderItems[0].priceAtPurchase").value(10.5));
+  }
+
+  @Test
+  @WithUserDetails(value = USER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void getOwnOrdersAsOtherUser_returnsEmpty() throws Exception {
+    mockMvc.perform(get("/order/own"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content").isArray())
+        .andExpect(jsonPath("$.content.length()").value(0));
+  }
+
+  @Test
+  @WithUserDetails(value = CUSTOMER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void getOwnOrdersAsCustomer_withFromDateInFuture_returnsEmpty() throws Exception {
+    Instant future = Instant.now().plus(Duration.ofDays(1));
+
+    mockMvc.perform(get("/order/own").param("fromDate", future.toString()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(0));
+  }
+
+  @Test
+  @WithUserDetails(value = CUSTOMER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void getOwnOrdersAsCustomer_withToDateInPast_returnsEmpty() throws Exception {
+    Instant past = Instant.now().minus(Duration.ofDays(1));
+
+    mockMvc.perform(get("/order/own").param("toDate", past.toString()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(0));
+  }
+
+  @Test
+  @WithUserDetails(value = CUSTOMER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void getOwnOrdersAsCustomer_withDateRangeCoveringNow_returnsOrder() throws Exception {
+    Instant from = Instant.now().minus(Duration.ofDays(1));
+    Instant to = Instant.now().plus(Duration.ofDays(1));
+
+    mockMvc.perform(get("/order/own")
+            .param("fromDate", from.toString())
+            .param("toDate", to.toString()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()));
   }
 }
