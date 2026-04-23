@@ -23,6 +23,14 @@ public class OrderSpecification {
     );
   }
 
+  public static Specification<Order> forCustomer(UUID customerId, OwnOrderFilter filter) {
+    return Specification.allOf(
+        customerIdEquals(customerId),
+        greaterThanOrEqualTo(ExtendedEntity_.createdAt, filter.fromDate()),
+        lessThanOrEqualTo(ExtendedEntity_.createdAt, filter.toDate())
+    );
+  }
+
   private static Specification<Order> customerIdEquals(@Nullable UUID customerId) {
     if (customerId == null) {
       return Specification.unrestricted();
