@@ -6,7 +6,9 @@ import com.noserbulgaria.micromarket.order.OrderItem;
 import com.stripe.StripeClient;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
+import com.stripe.model.Charge;
 import com.stripe.model.Event;
+import com.stripe.model.Refund;
 import com.stripe.model.StripeObject;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.RequestOptions;
@@ -33,10 +35,14 @@ public class StripePaymentProvider {
   private static final String EVENT_CHECKOUT_ASYNC_SUCCEEDED = "checkout.session.async_payment_succeeded";
   private static final String EVENT_CHECKOUT_ASYNC_FAILED = "checkout.session.async_payment_failed";
   private static final String EVENT_CHECKOUT_EXPIRED = "checkout.session.expired";
+  private static final String EVENT_CHARGE_REFUNDED = "charge.refunded";
+  private static final String EVENT_REFUND_FAILED = "refund.failed";
 
   private static final String PAYMENT_STATUS_PAID = "paid";
   private static final String PAYMENT_STATUS_NO_PAYMENT_REQUIRED = "no_payment_required";
   private static final String PAYMENT_STATUS_UNPAID = "unpaid";
+
+  private static final String METADATA_ORDER_NUMBER = "order_number";
 
   private final StripeClient stripeClient;
   private final StripeProperties properties;
@@ -59,7 +65,11 @@ public class StripePaymentProvider {
         .setMode(SessionCreateParams.Mode.PAYMENT)
         .setCustomer(stripeCustomerId)
         .setClientReferenceId(order.getId().toString())
-        .putMetadata("order_id", order.getId().toString())
+        .putMetadata(METADATA_ORDER_NUMBER, order.getOrderNumber())
+        .setPaymentIntentData(
+            SessionCreateParams.PaymentIntentData.builder()
+                .putMetadata(METADATA_ORDER_NUMBER, order.getOrderNumber())
+                .build())
         .setSuccessUrl(properties.successUrl())
         .setCancelUrl(properties.cancelUrl())
         .setExpiresAt(Instant.now().plus(Duration.ofMinutes(properties.sessionExpirationMinutes())).getEpochSecond());
@@ -115,18 +125,20 @@ public class StripePaymentProvider {
     return switch (event.getType()) {
       case EVENT_CHECKOUT_COMPLETED -> parseCompleted(event);
       case EVENT_CHECKOUT_ASYNC_SUCCEEDED -> {
-        Session session = extractSession(event);
+        Session session = extractDataObject(event, Session.class);
         yield Optional.of(new StripeWebhookEvent.CheckoutSucceeded(
             event.getId(), session.getId(), session.getPaymentIntent()));
       }
       case EVENT_CHECKOUT_ASYNC_FAILED -> {
-        Session session = extractSession(event);
+        Session session = extractDataObject(event, Session.class);
         yield Optional.of(new StripeWebhookEvent.CheckoutFailed(event.getId(), session.getId()));
       }
       case EVENT_CHECKOUT_EXPIRED -> {
-        Session session = extractSession(event);
+        Session session = extractDataObject(event, Session.class);
         yield Optional.of(new StripeWebhookEvent.CheckoutExpired(event.getId(), session.getId()));
       }
+      case EVENT_CHARGE_REFUNDED -> parseRefunded(event);
+      case EVENT_REFUND_FAILED -> parseRefundFailed(event);
       default -> {
         log.debug("Ignoring Stripe event {} of unhandled type {}", event.getId(), event.getType());
         yield Optional.empty();
@@ -136,32 +148,66 @@ public class StripePaymentProvider {
 
   /** Async methods (bank transfers etc.) complete with payment_status=unpaid; wait for the async follow-up instead. */
   private Optional<StripeWebhookEvent> parseCompleted(Event event) {
-    Session session = extractSession(event);
+    Session session = extractDataObject(event, Session.class);
     String paymentStatus = session.getPaymentStatus();
     return switch (paymentStatus) {
       case PAYMENT_STATUS_PAID, PAYMENT_STATUS_NO_PAYMENT_REQUIRED -> Optional.of(
           new StripeWebhookEvent.CheckoutSucceeded(event.getId(), session.getId(), session.getPaymentIntent()));
       case PAYMENT_STATUS_UNPAID -> {
-        log.debug("Checkout session {} completed with payment_status=unpaid — waiting for async outcome",
-            session.getId());
+        log.debug(
+            "Checkout session {} completed with payment_status=unpaid — waiting for async outcome",
+            session.getId()
+        );
         yield Optional.empty();
       }
       default -> {
-        log.warn("Checkout session {} completed with unexpected payment_status={}",
-            session.getId(), paymentStatus);
+        log.warn(
+            "Checkout session {} completed with unexpected payment_status={}",
+            session.getId(), paymentStatus
+        );
         yield Optional.empty();
       }
     };
   }
 
-  private Session extractSession(Event event) {
+  /** Full refund only; partial refunds are logged and ignored. */
+  private Optional<StripeWebhookEvent> parseRefunded(Event event) {
+    Charge charge = extractDataObject(event, Charge.class);
+    if (!Boolean.TRUE.equals(charge.getRefunded())) {
+      log.info(
+          "Ignoring partial refund on charge {} (amount_refunded={}, amount={})",
+          charge.getId(), charge.getAmountRefunded(), charge.getAmount()
+      );
+      return Optional.empty();
+    }
+    String paymentIntentId = charge.getPaymentIntent();
+    if (paymentIntentId == null) {
+      log.warn("Charge {} fully refunded but has no payment_intent — cannot correlate to an order", charge.getId());
+      return Optional.empty();
+    }
+    return Optional.of(new StripeWebhookEvent.PaymentRefunded(event.getId(), paymentIntentId));
+  }
+
+  /** Refund didn't complete; bank rejection or dashboard cancellation. */
+  private Optional<StripeWebhookEvent> parseRefundFailed(Event event) {
+    Refund refund = extractDataObject(event, Refund.class);
+    String paymentIntentId = refund.getPaymentIntent();
+    if (paymentIntentId == null) {
+      log.warn("Refund {} failed but has no payment_intent — cannot correlate to an order", refund.getId());
+      return Optional.empty();
+    }
+    return Optional.of(new StripeWebhookEvent.PaymentRefundFailed(event.getId(), paymentIntentId));
+  }
+
+  private <T extends StripeObject> T extractDataObject(Event event, Class<T> type) {
     StripeObject data = event.getDataObjectDeserializer().getObject()
         .orElseThrow(() -> new IllegalStateException(
             "Stripe event %s has no deserializable data object".formatted(event.getId())));
-    if (!(data instanceof Session session)) {
+    if (!type.isInstance(data)) {
       throw new IllegalStateException(
-          "Stripe event %s of type %s did not carry a Checkout Session".formatted(event.getId(), event.getType()));
+          "Stripe event %s of type %s did not carry a %s".formatted(
+              event.getId(), event.getType(), type.getSimpleName()));
     }
-    return session;
+    return type.cast(data);
   }
 }

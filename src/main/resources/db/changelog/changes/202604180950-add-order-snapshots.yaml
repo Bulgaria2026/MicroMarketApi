@@ -2,7 +2,6 @@ databaseChangeLog:
   - changeSet:
       id: 202604180950-1
       author: Lon60
-      comment: Sequence backing the human-readable order_number (MM-000001, …). Starts at 3 because the dev seed pre-allocates 1 and 2.
       changes:
         - createSequence:
             sequenceName: order_number_seq
@@ -12,7 +11,6 @@ databaseChangeLog:
   - changeSet:
       id: 202604180950-2
       author: Lon60
-      comment: Add order_number + email with placeholder defaults so seeded rows pass NOT NULL; backfilled below; defaults + unique constraint added right after.
       changes:
         - addColumn:
             tableName: orders
@@ -33,7 +31,6 @@ databaseChangeLog:
   - changeSet:
       id: 202604180950-3
       author: Lon60
-      comment: Backfill seeded orders. No-op in prod (no rows match); dev seeds get sensible values.
       changes:
         - update:
             tableName: orders

@@ -12,4 +12,10 @@ public sealed interface StripeWebhookEvent {
 
   record CheckoutExpired(String eventId, String sessionId) implements StripeWebhookEvent {
   }
+
+  record PaymentRefunded(String eventId, String paymentIntentId) implements StripeWebhookEvent {
+  }
+
+  record PaymentRefundFailed(String eventId, String paymentIntentId) implements StripeWebhookEvent {
+  }
 }
