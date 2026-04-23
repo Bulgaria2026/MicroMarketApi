@@ -42,6 +42,10 @@ jwt.public.key=file:./secrets/jwt/app.pub
 jwt.private.key=file:./secrets/jwt/app.key
 ```
 
+### Stripe (payments)
+
+Checkout requires a Stripe test-mode key and a running webhook listener. See [docs/stripe-dev.md](docs/stripe-dev.md) for the full setup.
+
 ---
 
 ## Running the Application

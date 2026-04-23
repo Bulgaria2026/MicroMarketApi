@@ -1,0 +1,106 @@
+databaseChangeLog:
+  - changeSet:
+      id: 202604180905-1
+      author: Lon60
+      changes:
+        - createTable:
+            tableName: customer
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: customer_type
+                  type: varchar(31)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: stripe_customer_id
+                  type: varchar(255)
+                  constraints:
+                    nullable: true
+                    unique: true
+                    uniqueConstraintName: uk_customer_stripe_customer_id
+              - column:
+                  name: created_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+                  defaultValueComputed: CURRENT_TIMESTAMP
+              - column:
+                  name: updated_at
+                  type: timestamp
+                  constraints:
+                    nullable: true
+                  defaultValueComputed: CURRENT_TIMESTAMP
+
+  - changeSet:
+      id: 202604180905-2
+      author: Lon60
+      changes:
+        - createTable:
+            tableName: guest
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+                    foreignKeyName: fk_guest_customer
+                    references: customer(id)
+              - column:
+                  name: email
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uk_guest_email
+
+  - changeSet:
+      id: 202604180905-3
+      author: Lon60
+      changes:
+        - createTable:
+            tableName: profile
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+                    foreignKeyName: fk_profile_customer
+                    references: customer(id)
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uk_profile_user_id
+                    foreignKeyName: fk_profile_user
+                    references: users(id)
+              - column:
+                  name: points
+                  type: bigint
+                  constraints:
+                    nullable: false
+                  defaultValueNumeric: 0
+
+  - changeSet:
+      id: 202604180905-4
+      author: Lon60
+      comment: Eager-seed Customer+Profile rows for every existing user so post-migration admin/profile queries see a full directory.
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO customer (id, customer_type, created_at, updated_at)
+              SELECT id, 'PROFILE', created_at, updated_at FROM users;
+        - sql:
+            sql: |
+              INSERT INTO profile (id, user_id, points)
+              SELECT id, id, 0 FROM users;

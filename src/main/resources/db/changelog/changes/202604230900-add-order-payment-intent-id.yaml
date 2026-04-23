@@ -1,0 +1,27 @@
+databaseChangeLog:
+  - changeSet:
+      id: 202604230900-1
+      author: Lon60
+      changes:
+        - addColumn:
+            tableName: orders
+            columns:
+              - column:
+                  name: stripe_payment_intent_id
+                  type: varchar(255)
+                  constraints:
+                    nullable: true
+                    unique: true
+                    uniqueConstraintName: uk_order_stripe_payment_intent_id
+
+  - changeSet:
+      id: 202604230900-2
+      author: Lon60
+      comment: Mirror stripe_payment_intent_id on orders_aud for Envers.
+      changes:
+        - addColumn:
+            tableName: orders_aud
+            columns:
+              - column:
+                  name: stripe_payment_intent_id
+                  type: varchar(255)

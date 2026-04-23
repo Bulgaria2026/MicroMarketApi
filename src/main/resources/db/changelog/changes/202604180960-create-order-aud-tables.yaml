@@ -1,0 +1,114 @@
+databaseChangeLog:
+  - changeSet:
+      id: 202604180960-1
+      author: Lon60
+      changes:
+        - createTable:
+            tableName: orders_aud
+            columns:
+              - column:
+                  name: rev
+                  type: integer
+                  constraints:
+                    nullable: false
+              - column:
+                  name: revtype
+                  type: smallint
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: varchar(50)
+              - column:
+                  name: customer_id
+                  type: uuid
+              - column:
+                  name: stripe_checkout_session_id
+                  type: varchar(255)
+              - column:
+                  name: total_amount
+                  type: decimal(10,2)
+              - column:
+                  name: order_number
+                  type: varchar(32)
+              - column:
+                  name: email
+                  type: varchar(255)
+              - column:
+                  name: created_at
+                  type: timestamp
+              - column:
+                  name: updated_at
+                  type: timestamp
+
+        - addPrimaryKey:
+            tableName: orders_aud
+            columnNames: rev, id
+            constraintName: pk_orders_aud
+
+        - addForeignKeyConstraint:
+            baseTableName: orders_aud
+            baseColumnNames: rev
+            referencedTableName: revinfo
+            referencedColumnNames: rev
+            constraintName: fk_orders_aud_revinfo
+
+  - changeSet:
+      id: 202604180960-2
+      author: Lon60
+      changes:
+        - createTable:
+            tableName: order_item_aud
+            columns:
+              - column:
+                  name: rev
+                  type: integer
+                  constraints:
+                    nullable: false
+              - column:
+                  name: revtype
+                  type: smallint
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    nullable: false
+              - column:
+                  name: order_id
+                  type: uuid
+              - column:
+                  name: product_id
+                  type: uuid
+              - column:
+                  name: quantity
+                  type: int
+              - column:
+                  name: price_at_purchase
+                  type: decimal(10,2)
+              - column:
+                  name: product_name
+                  type: varchar(255)
+              - column:
+                  name: original_unit_price
+                  type: decimal(10,2)
+              - column:
+                  name: created_at
+                  type: timestamp
+              - column:
+                  name: updated_at
+                  type: timestamp
+
+        - addPrimaryKey:
+            tableName: order_item_aud
+            columnNames: rev, id
+            constraintName: pk_order_item_aud
+
+        - addForeignKeyConstraint:
+            baseTableName: order_item_aud
+            baseColumnNames: rev
+            referencedTableName: revinfo
+            referencedColumnNames: rev
+            constraintName: fk_order_item_aud_revinfo

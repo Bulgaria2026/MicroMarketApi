@@ -20,6 +20,11 @@ services:
       DATABASE_USERNAME: ${DATABASE_USERNAME:-admin}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:-admin}
       CORS_ALLOWED-ORIGINS: http://localhost:5173
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_SUCCESS_URL: ${STRIPE_SUCCESS_URL:-http://localhost:5173/checkout/success?session_id={CHECKOUT_SESSION_ID}}
+      STRIPE_CANCEL_URL: ${STRIPE_CANCEL_URL:-http://localhost:5173/checkout/cancel}
+      STRIPE_SESSION_EXPIRATION_MINUTES: ${STRIPE_SESSION_EXPIRATION_MINUTES:-30}
     depends_on:
       - postgres
     networks:
