@@ -1,7 +1,5 @@
 package com.noserbulgaria.micromarket.auth.user;
 
-import com.noserbulgaria.micromarket.auth.user.dto.UserPatchRequestDto;
-import com.noserbulgaria.micromarket.auth.user.dto.UserResponseDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -34,7 +32,7 @@ public class UserController {
   @ApiResponse(responseCode = "404", description = "User not found")
   @GetMapping("/{id}")
   @PreAuthorize("hasRole('ADMINISTRATOR')")
-  public UserResponseDto getById(@Parameter(description = "User id") @PathVariable UUID id) {
+  public UserResponse getById(@Parameter(description = "User id") @PathVariable UUID id) {
     return userService.getByIdOrThrow(id);
   }
 
@@ -42,7 +40,7 @@ public class UserController {
   @ApiResponse(responseCode = "200", description = "User found")
   @ApiResponse(responseCode = "401", description = "Authentication required to access user")
   @GetMapping("/own")
-  public UserResponseDto getOwn(@AuthenticationPrincipal CustomUserDetails userDetails) {
+  public UserResponse getOwn(@AuthenticationPrincipal CustomUserDetails userDetails) {
     return userService.getByIdOrThrow(userDetails.getId());
   }
 
@@ -55,7 +53,7 @@ public class UserController {
   @ApiResponse(responseCode = "409", description = "Email already exists")
   @PreAuthorize("hasRole('ADMINISTRATOR')")
   @PatchMapping("/{id}")
-  public UserResponseDto patchUser(@PathVariable UUID id, @Valid @RequestBody UserPatchRequestDto request) {
+  public UserResponse patchUser(@PathVariable UUID id, @Valid @RequestBody UserPatchRequest request) {
     return userService.patchUserOrThrow(id, request);
   }
 }

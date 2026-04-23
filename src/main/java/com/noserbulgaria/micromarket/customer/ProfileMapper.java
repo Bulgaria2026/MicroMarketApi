@@ -1,7 +1,6 @@
-package com.noserbulgaria.micromarket.customer.dto;
+package com.noserbulgaria.micromarket.customer;
 
-import com.noserbulgaria.micromarket.auth.user.dto.UserMapper;
-import com.noserbulgaria.micromarket.customer.Profile;
+import com.noserbulgaria.micromarket.auth.user.UserMapper;
 import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -16,9 +15,9 @@ import org.mapstruct.ReportingPolicy;
 )
 public interface ProfileMapper {
 
-  ProfileResponseDto toDto(Profile profile);
+  ProfileResponse toDto(Profile profile);
 
   @BeanMapping(ignoreByDefault = true)
   @Mapping(target = "points", source = "points")
-  void update(ProfileRequestDto request, @MappingTarget Profile profile);
+  void update(ProfileRequest request, @MappingTarget Profile profile);
 }

@@ -1,6 +1,5 @@
 package com.noserbulgaria.micromarket.customer;
 
-import com.noserbulgaria.micromarket.customer.dto.CustomerResponseDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,7 +27,7 @@ public class CustomerController {
   @ApiResponse(responseCode = "403", description = "Forbidden - insufficient permissions")
   @PreAuthorize("hasRole('ADMINISTRATOR')")
   @GetMapping
-  public Page<CustomerResponseDto> getAll(
+  public Page<CustomerResponse> getAll(
       @ParameterObject Pageable pageable,
       @ParameterObject CustomerFilter filter
   ) {

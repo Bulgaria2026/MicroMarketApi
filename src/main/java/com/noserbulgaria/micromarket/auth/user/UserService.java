@@ -1,9 +1,6 @@
 package com.noserbulgaria.micromarket.auth.user;
 
 import com.noserbulgaria.micromarket.auth.refresh.RefreshTokenService;
-import com.noserbulgaria.micromarket.auth.user.dto.UserMapper;
-import com.noserbulgaria.micromarket.auth.user.dto.UserPatchRequestDto;
-import com.noserbulgaria.micromarket.auth.user.dto.UserResponseDto;
 import com.noserbulgaria.micromarket.exception.ConflictApiException;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
 import lombok.RequiredArgsConstructor;
@@ -21,12 +18,12 @@ public class UserService {
   private final RefreshTokenService refreshTokenService;
 
   @Transactional(readOnly = true)
-  public UserResponseDto getByIdOrThrow(UUID id) {
+  public UserResponse getByIdOrThrow(UUID id) {
     return userMapper.toDto(findUserByIdOrThrow(id));
   }
 
   @Transactional
-  public UserResponseDto patchUserOrThrow(UUID id, UserPatchRequestDto dto) {
+  public UserResponse patchUserOrThrow(UUID id, UserPatchRequest dto) {
     User user = findUserByIdOrThrow(id);
 
     if (dto.email() != null && !dto.email().equals(user.getEmail())) {

@@ -1,13 +1,11 @@
-package com.noserbulgaria.micromarket.auth.user.dto;
+package com.noserbulgaria.micromarket.auth.user;
 
-import com.noserbulgaria.micromarket.auth.user.AccountStatus;
-import com.noserbulgaria.micromarket.auth.user.Role;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import org.jspecify.annotations.Nullable;
 
-public record UserPatchRequestDto(
+public record UserPatchRequest(
 
     @Nullable
     @Email(message = "A valid email must be provided")

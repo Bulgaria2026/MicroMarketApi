@@ -1,8 +1,6 @@
 package com.noserbulgaria.micromarket.customer;
 
 import com.noserbulgaria.micromarket.auth.user.CustomUserDetails;
-import com.noserbulgaria.micromarket.customer.dto.ProfileRequestDto;
-import com.noserbulgaria.micromarket.customer.dto.ProfileResponseDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -35,7 +33,7 @@ public class ProfileController {
   @ApiResponse(responseCode = "404", description = "Profile not found")
   @GetMapping("/{id}")
   @PreAuthorize("hasRole('ADMINISTRATOR')")
-  public ProfileResponseDto getById(@Parameter(description = "Profile id") @PathVariable UUID id) {
+  public ProfileResponse getById(@Parameter(description = "Profile id") @PathVariable UUID id) {
     return profileService.getByIdOrThrow(id);
   }
 
@@ -43,7 +41,7 @@ public class ProfileController {
   @ApiResponse(responseCode = "200", description = "Profile found")
   @ApiResponse(responseCode = "401", description = "Authentication required to access a profile")
   @GetMapping("/own")
-  public ProfileResponseDto getOwn(@AuthenticationPrincipal CustomUserDetails userDetails) {
+  public ProfileResponse getOwn(@AuthenticationPrincipal CustomUserDetails userDetails) {
     return profileService.getByUserIdOrThrow(userDetails.getId());
   }
 
@@ -55,9 +53,9 @@ public class ProfileController {
   @ApiResponse(responseCode = "404", description = "Profile not found")
   @PutMapping("/{id}")
   @PreAuthorize("hasRole('ADMINISTRATOR')")
-  public ProfileResponseDto updateById(
+  public ProfileResponse updateById(
       @Parameter(description = "Profile id") @PathVariable UUID id,
-      @Valid @RequestBody ProfileRequestDto request
+      @Valid @RequestBody ProfileRequest request
   ) {
     return profileService.updateByIdOrThrow(id, request);
   }

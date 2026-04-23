@@ -1,6 +1,5 @@
-package com.noserbulgaria.micromarket.auth.user.dto;
+package com.noserbulgaria.micromarket.auth.user;
 
-import com.noserbulgaria.micromarket.auth.user.User;
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingConstants;
 import org.mapstruct.ReportingPolicy;
@@ -11,5 +10,5 @@ import org.mapstruct.ReportingPolicy;
 )
 public interface UserMapper {
 
-  UserResponseDto toDto(User user);
+  UserResponse toDto(User user);
 }

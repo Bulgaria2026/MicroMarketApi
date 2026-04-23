@@ -1,9 +1,5 @@
-package com.noserbulgaria.micromarket.customer.dto;
+package com.noserbulgaria.micromarket.customer;
 
-import com.noserbulgaria.micromarket.customer.Customer;
-import com.noserbulgaria.micromarket.customer.CustomerType;
-import com.noserbulgaria.micromarket.customer.Guest;
-import com.noserbulgaria.micromarket.customer.Profile;
 import com.noserbulgaria.micromarket.exception.BadRequestApiException;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -16,7 +12,7 @@ import org.mapstruct.ReportingPolicy;
 )
 public interface CustomerMapper {
 
-  default CustomerResponseDto toDto(Customer customer) {
+  default CustomerResponse toDto(Customer customer) {
     return switch (customer) {
       case Guest guest -> toDto(guest);
       case Profile profile -> toDto(profile);
@@ -29,12 +25,12 @@ public interface CustomerMapper {
   @Mapping(target = "role", ignore = true)
   @Mapping(target = "status", ignore = true)
   @Mapping(target = "points", ignore = true)
-  CustomerResponseDto toDto(Guest guest);
+  CustomerResponse toDto(Guest guest);
 
   @Mapping(target = "type", expression = "java(CustomerType.PROFILE)")
   @Mapping(target = "email", source = "user.email")
   @Mapping(target = "role", source = "user.role")
   @Mapping(target = "status", source = "user.status")
   @Mapping(target = "points", source = "points")
-  CustomerResponseDto toDto(Profile profile);
+  CustomerResponse toDto(Profile profile);
 }

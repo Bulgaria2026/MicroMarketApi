@@ -1,7 +1,5 @@
 package com.noserbulgaria.micromarket.customer;
 
-import com.noserbulgaria.micromarket.customer.dto.CustomerMapper;
-import com.noserbulgaria.micromarket.customer.dto.CustomerResponseDto;
 import com.noserbulgaria.micromarket.exception.BadRequestApiException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -23,7 +21,7 @@ public class CustomerService {
   private final CustomerMapper customerMapper;
 
   @Transactional(readOnly = true)
-  public Page<CustomerResponseDto> findAll(CustomerFilter filter, Pageable pageable) {
+  public Page<CustomerResponse> findAll(CustomerFilter filter, Pageable pageable) {
     return customerRepository.findAll(
         CustomerSpecification.withFilter(filter),
         validatedPageable(pageable)

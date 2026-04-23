@@ -1,14 +1,17 @@
-package com.noserbulgaria.micromarket.auth.user.dto;
+package com.noserbulgaria.micromarket.customer;
 
 import com.noserbulgaria.micromarket.auth.user.AccountStatus;
 import com.noserbulgaria.micromarket.auth.user.Role;
+import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
 import java.util.UUID;
 
-public record UserResponseDto(
+public record CustomerResponse(
 
     UUID id,
+
+    CustomerType type,
 
     Instant createdAt,
 
@@ -16,9 +19,11 @@ public record UserResponseDto(
 
     String email,
 
-    Role role,
+    @Nullable Role role,
 
-    AccountStatus status
+    @Nullable AccountStatus status,
+
+    @Nullable Long points
 
 ) {
 }
