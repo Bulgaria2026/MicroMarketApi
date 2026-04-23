@@ -1,24 +1,18 @@
 package com.noserbulgaria.micromarket.product;
 
-import com.jayway.jsonpath.JsonPath;
 import com.noserbulgaria.micromarket.order.OrderRepository;
-import com.noserbulgaria.micromarket.auth.user.Role;
-import com.noserbulgaria.micromarket.auth.user.User;
-import com.noserbulgaria.micromarket.auth.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.test.context.support.TestExecutionEvent;
+import org.springframework.security.test.context.support.WithUserDetails;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 
 import java.math.BigDecimal;
-import java.util.Objects;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -34,31 +28,20 @@ class ProductIntegrationTests {
 
   private static final String ADMIN_EMAIL = "admin@micromarket.dev";
   private static final String USER_EMAIL = "user@micromarket.dev";
-  private static final String PASSWORD = "user123";
 
   @Autowired
   private MockMvc mockMvc;
 
   @Autowired
-  private UserRepository userRepository;
-
-  @Autowired
-  private ProductRepository productRepository;
-
-  @Autowired
   private OrderRepository orderRepository;
 
   @Autowired
-  private PasswordEncoder passwordEncoder;
+  private ProductRepository productRepository;
 
   @BeforeEach
   void setUp() {
     orderRepository.deleteAll();
     productRepository.deleteAll();
-    userRepository.deleteAll();
-
-    userRepository.save(createUser(ADMIN_EMAIL, Role.ADMINISTRATOR));
-    userRepository.save(createUser(USER_EMAIL, Role.USER));
   }
 
   //region Public API Tests
@@ -148,34 +131,31 @@ class ProductIntegrationTests {
   }
 
   @Test
+  @WithUserDetails(value = USER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getById_disabledProductWithUserToken_returns404() throws Exception {
-    String userToken = accessTokenFor(USER_EMAIL, PASSWORD);
     Product product = productRepository.saveAndFlush(product("Hidden Water", false, 5L));
 
-    mockMvc.perform(get("/product/{id}", product.getId())
-            .header(HttpHeaders.AUTHORIZATION, bearer(userToken)))
+    mockMvc.perform(get("/product/{id}", product.getId()))
         .andExpect(status().isNotFound());
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getById_disabledProductWithAdminToken_returns200() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
     Product product = productRepository.saveAndFlush(product("Hidden Water", false, 5L));
 
-    mockMvc.perform(get("/product/{id}", product.getId())
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+    mockMvc.perform(get("/product/{id}", product.getId()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(product.getId().toString()))
         .andExpect(jsonPath("$.enabled").value(false));
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getById_enabledProductWithAdminToken_returnsProduct() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
     Product product = productRepository.saveAndFlush(product("Admin Water", true, 5L));
 
-    mockMvc.perform(get("/product/{id}", product.getId())
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+    mockMvc.perform(get("/product/{id}", product.getId()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(product.getId().toString()))
         .andExpect(jsonPath("$.enabled").value(true));
@@ -203,14 +183,13 @@ class ProductIntegrationTests {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_adminWithEnabledFilterFalse_returnsDisabledProducts() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
     productRepository.saveAndFlush(product("Juice", true, 4L));
     productRepository.saveAndFlush(product("Hidden", false, 9L));
 
     mockMvc.perform(get("/product")
-            .param("enabled", "false")
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+            .param("enabled", "false"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
         .andExpect(jsonPath("$.content[0].name").value("Hidden"))
@@ -218,27 +197,25 @@ class ProductIntegrationTests {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_adminWithNoEnabledFilter_returnsAllProducts() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
     productRepository.saveAndFlush(product("Juice", true, 4L));
     productRepository.saveAndFlush(product("Hidden", false, 9L));
 
-    mockMvc.perform(get("/product")
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+    mockMvc.perform(get("/product"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(2))
         .andExpect(jsonPath("$.page.totalElements").value(2));
   }
 
   @Test
+  @WithUserDetails(value = USER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_userWithEnabledFilterFalse_stillReturnsOnlyEnabled() throws Exception {
-    String userToken = accessTokenFor(USER_EMAIL, PASSWORD);
     productRepository.saveAndFlush(product("Juice", true, 4L));
     productRepository.saveAndFlush(product("Hidden", false, 9L));
 
     mockMvc.perform(get("/product")
-            .param("enabled", "false")
-            .header(HttpHeaders.AUTHORIZATION, bearer(userToken)))
+            .param("enabled", "false"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
         .andExpect(jsonPath("$.content[0].name").value("Juice"));
@@ -272,12 +249,11 @@ class ProductIntegrationTests {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getHistory_disabledProductWithAdminToken_returns200() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
     Product product = productRepository.saveAndFlush(product("Hidden Water", false, 5L));
 
-    mockMvc.perform(get("/product/{id}/history", product.getId())
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+    mockMvc.perform(get("/product/{id}/history", product.getId()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(1));
   }
@@ -291,12 +267,11 @@ class ProductIntegrationTests {
   }
 
   @Test
+  @WithUserDetails(value = USER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getHistory_disabledProductWithUserToken_returns404() throws Exception {
-    String userToken = accessTokenFor(USER_EMAIL, PASSWORD);
     Product product = productRepository.saveAndFlush(product("Hidden Water", false, 5L));
 
-    mockMvc.perform(get("/product/{id}/history", product.getId())
-            .header(HttpHeaders.AUTHORIZATION, bearer(userToken)))
+    mockMvc.perform(get("/product/{id}/history", product.getId()))
         .andExpect(status().isNotFound());
   }
 
@@ -309,11 +284,9 @@ class ProductIntegrationTests {
 
   //region Admin API Tests
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void create_withAdminToken_returns201() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
-
     mockMvc.perform(post("/product")
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
             .contentType(MediaType.APPLICATION_JSON)
             .content(validWriteBody("Fanta", "Orange soda", 6L)))
         .andExpect(status().isCreated())
@@ -330,22 +303,18 @@ class ProductIntegrationTests {
   }
 
   @Test
+  @WithUserDetails(value = USER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void create_withUserToken_returns403() throws Exception {
-    String userToken = accessTokenFor(USER_EMAIL, PASSWORD);
-
     mockMvc.perform(post("/product")
-            .header(HttpHeaders.AUTHORIZATION, bearer(userToken))
             .contentType(MediaType.APPLICATION_JSON)
             .content(validWriteBody("Fanta", "Orange soda", 6L)))
         .andExpect(status().isForbidden());
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void create_invalidBody_returns400() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
-
     mockMvc.perform(post("/product")
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"name":"","description":"","price":-1,"discount":101,"enabled":true,"amount":-5}
@@ -359,12 +328,11 @@ class ProductIntegrationTests {
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void update_withAdminToken_returns200() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
     Product product = productRepository.saveAndFlush(product("Tea", true, 2L));
 
     mockMvc.perform(put("/product/{id}", product.getId())
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
             .contentType(MediaType.APPLICATION_JSON)
             .content(validWriteBody("Iced Tea", "Cold tea", 15L)))
         .andExpect(status().isOk())
@@ -383,46 +351,40 @@ class ProductIntegrationTests {
   }
 
   @Test
+  @WithUserDetails(value = USER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void update_withUserToken_returns403() throws Exception {
-    String userToken = accessTokenFor(USER_EMAIL, PASSWORD);
     Product product = productRepository.saveAndFlush(product("Tea", true, 2L));
 
     mockMvc.perform(put("/product/{id}", product.getId())
-            .header(HttpHeaders.AUTHORIZATION, bearer(userToken))
             .contentType(MediaType.APPLICATION_JSON)
             .content(validWriteBody("Iced Tea", "Cold tea", 15L)))
         .andExpect(status().isForbidden());
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void update_nonExistentProduct_returns404() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
-
     mockMvc.perform(put("/product/{id}", UUID.randomUUID())
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
             .contentType(MediaType.APPLICATION_JSON)
             .content(validWriteBody("Iced Tea", "Cold tea", 15L)))
         .andExpect(status().isNotFound());
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void update_invalidUuid_returns400() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
-
     mockMvc.perform(put("/product/{id}", "not-a-uuid")
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
             .contentType(MediaType.APPLICATION_JSON)
             .content(validWriteBody("Iced Tea", "Cold tea", 15L)))
         .andExpect(status().isBadRequest());
   }
 
   @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void update_invalidBody_returns400() throws Exception {
-    String adminToken = accessTokenFor(ADMIN_EMAIL, PASSWORD);
     Product product = productRepository.saveAndFlush(product("Tea", true, 2L));
 
     mockMvc.perform(put("/product/{id}", product.getId())
-            .header(HttpHeaders.AUTHORIZATION, bearer(adminToken))
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"name":"","description":"","price":0,"discount":-1,"enabled":true,"amount":-1}
@@ -431,14 +393,6 @@ class ProductIntegrationTests {
   }
 
   //endregion
-
-  private User createUser(String email, Role role) {
-    User user = new User();
-    user.setEmail(email);
-    user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
-    user.setRole(role);
-    return user;
-  }
 
   private Product product(String name, boolean enabled, long amount) {
     return product(name, enabled, amount, BigDecimal.valueOf(2));
@@ -459,21 +413,5 @@ class ProductIntegrationTests {
     return """
         {"name":"%s","description":"%s","price":2.5,"discount":0,"enabled":false,"amount":%d}
         """.formatted(name, description, amount);
-  }
-
-  private String accessTokenFor(String email, String password) throws Exception {
-    MvcResult loginResult = mockMvc.perform(post("/auth/login")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content("""
-                {"email": "%s", "password": "%s"}
-                """.formatted(email, password)))
-        .andExpect(status().isOk())
-        .andReturn();
-
-    return JsonPath.read(loginResult.getResponse().getContentAsString(), "$.accessToken");
-  }
-
-  private String bearer(String accessToken) {
-    return "Bearer " + accessToken;
   }
 }

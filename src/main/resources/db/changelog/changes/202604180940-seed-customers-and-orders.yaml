@@ -3,62 +3,7 @@ databaseChangeLog:
       id: 202604180940-1
       author: Lon60
       context: dev
-      comment: Seed a Profile for each seeded User so order seeds have a valid customer FK.
-      changes:
-        - insert:
-            tableName: customer
-            columns:
-              - column:
-                  name: id
-                  value: "c1000000-0000-0000-0000-000000000001"
-              - column:
-                  name: customer_type
-                  value: "PROFILE"
-              - column:
-                  name: created_at
-                  valueDate: "2023-10-01T10:00:00"
-        - insert:
-            tableName: profile
-            columns:
-              - column:
-                  name: id
-                  value: "c1000000-0000-0000-0000-000000000001"
-              - column:
-                  name: user_id
-                  value: "a0000000-0000-0000-0000-000000000001"
-              - column:
-                  name: points
-                  valueNumeric: 0
-        - insert:
-            tableName: customer
-            columns:
-              - column:
-                  name: id
-                  value: "c1000000-0000-0000-0000-000000000002"
-              - column:
-                  name: customer_type
-                  value: "PROFILE"
-              - column:
-                  name: created_at
-                  valueDate: "2023-10-01T10:00:00"
-        - insert:
-            tableName: profile
-            columns:
-              - column:
-                  name: id
-                  value: "c1000000-0000-0000-0000-000000000002"
-              - column:
-                  name: user_id
-                  value: "b0000000-0000-0000-0000-000000000001"
-              - column:
-                  name: points
-                  valueNumeric: 0
-
-  - changeSet:
-      id: 202604180940-2
-      author: Lon60
-      context: dev
-      comment: Seed a guest customer referenced by example guest orders.
+      comment: Seed a Guest customer for the guest-checkout example flow. Profiles for seeded users are created by the eager seed in 202604180905.
       changes:
         - insert:
             tableName: customer
@@ -83,7 +28,7 @@ databaseChangeLog:
                   value: "guest@micromarket.dev"
 
   - changeSet:
-      id: 202604180940-3
+      id: 202604180940-2
       author: Lon60
       context: dev
       changes:
@@ -98,7 +43,7 @@ databaseChangeLog:
                   value: "PAID"
               - column:
                   name: customer_id
-                  value: "c1000000-0000-0000-0000-000000000001"
+                  value: "a0000000-0000-0000-0000-000000000001"
               - column:
                   name: stripe_checkout_session_id
                   value: "cs_seed_admin_paid"
@@ -119,7 +64,7 @@ databaseChangeLog:
                   value: "PENDING_PAYMENT"
               - column:
                   name: customer_id
-                  value: "c1000000-0000-0000-0000-000000000002"
+                  value: "b0000000-0000-0000-0000-000000000001"
               - column:
                   name: stripe_checkout_session_id
                   value: "cs_seed_user_pending"

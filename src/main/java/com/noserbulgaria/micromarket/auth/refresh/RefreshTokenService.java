@@ -1,9 +1,10 @@
 package com.noserbulgaria.micromarket.auth.refresh;
 
-import com.noserbulgaria.micromarket.exception.UnauthorizedApiException;
 import com.noserbulgaria.micromarket.auth.TokenService;
+import com.noserbulgaria.micromarket.auth.user.AccountStatus;
 import com.noserbulgaria.micromarket.auth.user.User;
 import com.noserbulgaria.micromarket.auth.user.UserRepository;
+import com.noserbulgaria.micromarket.exception.UnauthorizedApiException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -74,6 +75,11 @@ public class RefreshTokenService {
     User user = userRepository.findById(presented.getUserId())
         .orElseThrow(() -> new UnauthorizedApiException(INVALID_REFRESH_TOKEN));
 
+    if (user.getStatus() != AccountStatus.ACTIVE) {
+      revokeAllForUser(user.getId());
+      throw new UnauthorizedApiException(INVALID_REFRESH_TOKEN);
+    }
+
     presented.setRevokedAt(now);
     String newRawToken = issueInFamily(user, presented.getFamilyId());
     return new RotationResult(user, newRawToken);
@@ -97,6 +103,10 @@ public class RefreshTokenService {
     UUID jti = parseJti(jwt);
     refreshTokenRepository.findByJti(jti)
         .ifPresent(token -> refreshTokenRepository.revokeFamily(token.getFamilyId(), Instant.now()));
+  }
+
+  public void revokeAllForUser(UUID userId) {
+    refreshTokenRepository.revokeAllForUser(userId, Instant.now());
   }
 
   private String issueInFamily(User user, UUID familyId) {

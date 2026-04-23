@@ -1,10 +1,20 @@
 package com.noserbulgaria.micromarket.customer;
 
 import com.noserbulgaria.micromarket.common.ExtendedEntity;
-import jakarta.persistence.*;
+import com.noserbulgaria.micromarket.order.Order;
+import jakarta.persistence.Column;
+import jakarta.persistence.DiscriminatorColumn;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Inheritance;
+import jakarta.persistence.InheritanceType;
+import jakarta.persistence.OneToMany;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.ToString;
 import org.jspecify.annotations.Nullable;
+
+import java.util.HashSet;
+import java.util.Set;
 
 @Data
 @Entity
@@ -20,4 +30,9 @@ public abstract class Customer extends ExtendedEntity {
    */
   @Column(unique = true)
   private @Nullable String stripeCustomerId;
+
+  @EqualsAndHashCode.Exclude
+  @ToString.Exclude
+  @OneToMany(mappedBy = "customer")
+  private Set<Order> orders = new HashSet<>();
 }

@@ -1,6 +1,6 @@
 databaseChangeLog:
   - changeSet:
-      id: 202604180910-1
+      id: 202604180905-1
       author: Lon60
       changes:
         - createTable:
@@ -38,7 +38,7 @@ databaseChangeLog:
                   defaultValueComputed: CURRENT_TIMESTAMP
 
   - changeSet:
-      id: 202604180910-2
+      id: 202604180905-2
       author: Lon60
       changes:
         - createTable:
@@ -61,7 +61,7 @@ databaseChangeLog:
                     uniqueConstraintName: uk_guest_email
 
   - changeSet:
-      id: 202604180910-3
+      id: 202604180905-3
       author: Lon60
       changes:
         - createTable:
@@ -86,7 +86,21 @@ databaseChangeLog:
                     references: users(id)
               - column:
                   name: points
-                  type: integer
+                  type: bigint
                   constraints:
                     nullable: false
                   defaultValueNumeric: 0
+
+  - changeSet:
+      id: 202604180905-4
+      author: Lon60
+      comment: Eager-seed Customer+Profile rows for every existing user so post-migration admin/profile queries see a full directory.
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO customer (id, customer_type, created_at, updated_at)
+              SELECT id, 'PROFILE', created_at, updated_at FROM users;
+        - sql:
+            sql: |
+              INSERT INTO profile (id, user_id, points)
+              SELECT id, id, 0 FROM users;

@@ -1,14 +1,18 @@
 package com.noserbulgaria.micromarket.auth.refresh;
 
+import com.noserbulgaria.micromarket.auth.user.AccountStatus;
 import com.noserbulgaria.micromarket.auth.user.Role;
 import com.noserbulgaria.micromarket.auth.user.User;
 import com.noserbulgaria.micromarket.auth.user.UserRepository;
+import com.noserbulgaria.micromarket.customer.Profile;
+import com.noserbulgaria.micromarket.customer.ProfileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -22,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SpringBootTest
 @ActiveProfiles("test")
+@Transactional
 class RefreshTokenCleanupJobTest {
 
   @Autowired
@@ -37,20 +42,28 @@ class RefreshTokenCleanupJobTest {
   private UserRepository userRepository;
 
   @Autowired
+  private ProfileRepository profileRepository;
+
+  @Autowired
   private PasswordEncoder passwordEncoder;
 
   private UUID userId;
 
   @BeforeEach
   void setUp() {
-    refreshTokenRepository.deleteAll();
-    userRepository.deleteAll();
-
     User user = new User();
     user.setEmail("cleanup@micromarket.dev");
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode("user123")));
     user.setRole(Role.USER);
-    userId = userRepository.save(user).getId();
+    user.setStatus(AccountStatus.ACTIVE);
+    user = userRepository.save(user);
+
+    Profile profile = new Profile();
+    profile.setUser(user);
+    profile.setPoints(0);
+    profileRepository.save(profile);
+
+    userId = user.getId();
   }
 
   @Test
@@ -86,12 +99,16 @@ class RefreshTokenCleanupJobTest {
         .map(RefreshToken::getJti)
         .collect(Collectors.toUnmodifiableSet());
 
-    assertEquals(Set.of(fresh, recentlyRevoked, expiredWithinGrace), remaining,
-        "Cleanup must keep fresh, recently-revoked, and still-in-grace rows; delete others");
-    assertEquals(List.of(), refreshTokenRepository.findAll().stream()
-        .map(RefreshToken::getJti)
-        .filter(jti -> jti.equals(longExpired) || jti.equals(longRevoked))
-        .toList());
+    assertEquals(
+        Set.of(fresh, recentlyRevoked, expiredWithinGrace), remaining,
+        "Cleanup must keep fresh, recently-revoked, and still-in-grace rows; delete others"
+    );
+    assertEquals(
+        List.of(), refreshTokenRepository.findAll().stream()
+            .map(RefreshToken::getJti)
+            .filter(jti -> jti.equals(longExpired) || jti.equals(longRevoked))
+            .toList()
+    );
   }
 
   private UUID insert(java.util.function.Consumer<TokenAttrs> customizer) {
@@ -117,9 +134,8 @@ class RefreshTokenCleanupJobTest {
       return this;
     }
 
-    TokenAttrs revokedAt(Instant value) {
+    void revokedAt(Instant value) {
       this.revokedAt = value;
-      return this;
     }
   }
 }

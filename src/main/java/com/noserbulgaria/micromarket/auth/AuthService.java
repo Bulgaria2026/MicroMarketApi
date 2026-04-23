@@ -2,11 +2,19 @@ package com.noserbulgaria.micromarket.auth;
 
 import com.noserbulgaria.micromarket.auth.refresh.RefreshTokenService;
 import com.noserbulgaria.micromarket.auth.refresh.RotationResult;
+import com.noserbulgaria.micromarket.auth.user.AccountStatus;
 import com.noserbulgaria.micromarket.auth.user.Role;
 import com.noserbulgaria.micromarket.auth.user.User;
 import com.noserbulgaria.micromarket.auth.user.UserRepository;
+import com.noserbulgaria.micromarket.customer.Customer;
+import com.noserbulgaria.micromarket.customer.Guest;
+import com.noserbulgaria.micromarket.customer.GuestRepository;
+import com.noserbulgaria.micromarket.customer.Profile;
+import com.noserbulgaria.micromarket.customer.ProfileRepository;
 import com.noserbulgaria.micromarket.exception.ConflictApiException;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
+import com.noserbulgaria.micromarket.order.Order;
+import com.noserbulgaria.micromarket.order.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -16,6 +24,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +36,9 @@ public class AuthService {
   private final TokenService tokenService;
   private final RefreshTokenService refreshTokenService;
   private final PasswordEncoder passwordEncoder;
+  private final GuestRepository guestRepository;
+  private final OrderRepository orderRepository;
+  private final ProfileRepository profileRepository;
 
   @Transactional
   public AuthTokens register(RegisterRequest request) {
@@ -37,7 +50,23 @@ public class AuthService {
     user.setEmail(request.email());
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode(request.password())));
     user.setRole(Role.USER);
+    user.setStatus(AccountStatus.ACTIVE);
     user = userRepository.save(user);
+
+    Profile profile = new Profile();
+    profile.setUser(user);
+    profile.setPoints(0);
+
+    Customer registeredCustomer = profileRepository.save(profile);
+
+    Optional<Guest> existingGuest = guestRepository.findByEmailIgnoreCase(request.email());
+    if (existingGuest.isPresent()) {
+      Guest guest = existingGuest.get();
+      Set<Order> guestOrders = guest.getOrders();
+      guestOrders.forEach(order -> order.setCustomer(registeredCustomer));
+      orderRepository.saveAll(guestOrders);
+      guestRepository.delete(guest);
+    }
 
     return buildAuthTokens(user, refreshTokenService.issueForNewFamily(user));
   }

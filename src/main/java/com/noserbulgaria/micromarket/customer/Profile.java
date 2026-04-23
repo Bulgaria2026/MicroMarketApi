@@ -8,11 +8,14 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 import lombok.ToString;
 
 @Data
+@NoArgsConstructor
 @Entity
 @Table(name = "profile")
 @DiscriminatorValue("PROFILE")
@@ -26,6 +29,7 @@ public class Profile extends Customer {
   @JoinColumn(name = "user_id", nullable = false, unique = true)
   private User user;
 
+  @Min(0)
   @Column(nullable = false)
-  private int points;
+  private long points;
 }

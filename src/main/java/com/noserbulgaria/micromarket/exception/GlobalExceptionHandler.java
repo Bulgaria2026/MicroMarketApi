@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
@@ -107,6 +108,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
       MissingServletRequestParameterException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
     ProblemDetail pd = buildProblem(HttpStatus.BAD_REQUEST, "Request Binding Failed",
         ex.getMessage(), request);
+    return handleExceptionInternal(ex, pd, headers, status, request);
+  }
+
+  @Override
+  protected @Nullable ResponseEntity<Object> handleHttpMessageNotReadable(
+      HttpMessageNotReadableException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+    ProblemDetail pd = buildProblem(HttpStatus.BAD_REQUEST, "Bad Request",
+        "Request body is malformed or contains invalid values.", request);
     return handleExceptionInternal(ex, pd, headers, status, request);
   }
 

@@ -7,7 +7,9 @@ import org.springframework.data.jpa.domain.Specification;
 
 import java.util.UUID;
 
-import static com.noserbulgaria.micromarket.common.SpecificationBuilder.*;
+import static com.noserbulgaria.micromarket.common.SpecificationBuilder.equalTo;
+import static com.noserbulgaria.micromarket.common.SpecificationBuilder.greaterThanOrEqualTo;
+import static com.noserbulgaria.micromarket.common.SpecificationBuilder.lessThanOrEqualTo;
 
 @UtilityClass
 public class OrderSpecification {
