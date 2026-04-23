@@ -3,7 +3,6 @@ databaseChangeLog:
       id: 202604180940-1
       author: Lon60
       context: dev
-      comment: Seed a Guest customer for the guest-checkout example flow. Profiles for seeded users are created by the eager seed in 202604180905.
       changes:
         - insert:
             tableName: customer

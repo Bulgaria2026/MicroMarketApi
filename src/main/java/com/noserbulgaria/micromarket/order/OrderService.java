@@ -34,4 +34,10 @@ public class OrderService {
         .orElseThrow(() -> new NotFoundApiException(
             "Order with Stripe Checkout session id '%s' not found".formatted(stripeCheckoutSessionId)));
   }
+
+  public Order findByStripePaymentIntentIdOrThrow(String stripePaymentIntentId) {
+    return orderRepository.findByStripePaymentIntentId(stripePaymentIntentId)
+        .orElseThrow(() -> new NotFoundApiException(
+            "Order with Stripe Payment Intent id '%s' not found".formatted(stripePaymentIntentId)));
+  }
 }

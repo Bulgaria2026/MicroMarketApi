@@ -13,4 +13,6 @@ public interface OrderRepository extends
     RevisionRepository<Order, UUID, Integer> {
 
   Optional<Order> findByStripeCheckoutSessionId(String stripeCheckoutSessionId);
+
+  Optional<Order> findByStripePaymentIntentId(String stripePaymentIntentId);
 }

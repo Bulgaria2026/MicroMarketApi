@@ -409,6 +409,173 @@ class OrderPlacementIntegrationTests {
   }
 
   @Test
+  void webhook_paymentRefunded_marksOrderRefundedAndLeavesStockUntouched() throws Exception {
+    UUID orderId = placedOrderId(coffeeBeans.getId(), 2, "refund@example.com");
+    String sessionId = sessionIdFor(orderId);
+
+    stubCheckoutSucceeded("evt_refund_prep", sessionId, "pi_refund_full");
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatusType.PAID);
+    long stockAfterPaid = productRepository.findById(coffeeBeans.getId()).orElseThrow().getAmount();
+
+    stubPaymentRefunded("evt_refund_done", "pi_refund_full");
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    Order refunded = orderRepository.findById(orderId).orElseThrow();
+    assertThat(refunded.getStatus()).isEqualTo(OrderStatusType.REFUNDED);
+    assertThat(refunded.getStripePaymentIntentId()).isEqualTo("pi_refund_full");
+
+    long stockAfterRefund = productRepository.findById(coffeeBeans.getId()).orElseThrow().getAmount();
+    assertThat(stockAfterRefund)
+        .as("Dashboard refund must not auto-restore stock — inventory reconciliation is manual")
+        .isEqualTo(stockAfterPaid);
+  }
+
+  @Test
+  void webhook_replayedRefundEvent_isNoOp() throws Exception {
+    UUID orderId = placedOrderId(sparklingWater.getId(), 1, "refund-replay@example.com");
+    String sessionId = sessionIdFor(orderId);
+
+    stubCheckoutSucceeded("evt_replay_paid", sessionId, "pi_replay");
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    stubPaymentRefunded("evt_replay_refund", "pi_replay");
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatusType.REFUNDED);
+  }
+
+  @Test
+  void webhook_refundEventForSelfTriggeredRefundOnCancelledOrder_isNoOp() throws Exception {
+    UUID orderId = placedOrderId(coffeeBeans.getId(), 2, "self-refund@example.com");
+    String sessionId = sessionIdFor(orderId);
+
+    Product product = productRepository.findById(coffeeBeans.getId()).orElseThrow();
+    product.setAmount(0L);
+    productRepository.saveAndFlush(product);
+
+    stubCheckoutSucceeded("evt_self_cancel", sessionId, "pi_self_refund");
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatusType.CANCELLED);
+    assertThat(orderRepository.findById(orderId).orElseThrow().getStripePaymentIntentId())
+        .as("PI id must be persisted even on the stock-exhaustion → CANCELLED path so the incoming charge.refunded can be correlated")
+        .isEqualTo("pi_self_refund");
+
+    stubPaymentRefunded("evt_self_refund_echo", "pi_self_refund");
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    assertThat(orderRepository.findById(orderId).orElseThrow().getStatus())
+        .as("Status guard must block CANCELLED → REFUNDED, order stays CANCELLED")
+        .isEqualTo(OrderStatusType.CANCELLED);
+  }
+
+  @Test
+  void webhook_refundFailedAfterRefund_revertsOrderToPaid() throws Exception {
+    UUID orderId = placedOrderId(sparklingWater.getId(), 1, "refund-cancel@example.com");
+    String sessionId = sessionIdFor(orderId);
+
+    stubCheckoutSucceeded("evt_cancel_paid", sessionId, "pi_refund_cancel");
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    stubPaymentRefunded("evt_cancel_refund", "pi_refund_cancel");
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatusType.REFUNDED);
+
+    stubPaymentRefundFailed("evt_cancel_failed", "pi_refund_cancel");
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatusType.PAID);
+  }
+
+  @Test
+  void webhook_refundFailedOnPaidOrder_isNoOp() throws Exception {
+    UUID orderId = placedOrderId(sparklingWater.getId(), 1, "refund-fail-paid@example.com");
+    String sessionId = sessionIdFor(orderId);
+
+    stubCheckoutSucceeded("evt_failpaid_paid", sessionId, "pi_fail_on_paid");
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    stubPaymentRefundFailed("evt_failpaid_failed", "pi_fail_on_paid");
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatusType.PAID);
+  }
+
+  @Test
+  void webhook_partialRefundIgnoredByProvider_leavesOrderPaid() throws Exception {
+    UUID orderId = placedOrderId(sparklingWater.getId(), 1, "partial@example.com");
+    String sessionId = sessionIdFor(orderId);
+
+    stubCheckoutSucceeded("evt_partial_paid", sessionId, "pi_partial");
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    stubVerifyEmpty();
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    assertThat(orderRepository.findById(orderId).orElseThrow().getStatus()).isEqualTo(OrderStatusType.PAID);
+  }
+
+  @Test
   void authenticatedCheckout_reusesStripeCustomerOnSecondOrder() throws Exception {
     String token = accessTokenFor(USER_EMAIL, PASSWORD);
 
@@ -494,6 +661,21 @@ class OrderPlacementIntegrationTests {
   private void stubCheckoutExpired(String eventId, String sessionId) {
     when(stripePaymentProvider.verifyAndParse(any(), eq("valid")))
         .thenReturn(Optional.of(new StripeWebhookEvent.CheckoutExpired(eventId, sessionId)));
+  }
+
+  private void stubPaymentRefunded(String eventId, String paymentIntentId) {
+    when(stripePaymentProvider.verifyAndParse(any(), eq("valid")))
+        .thenReturn(Optional.of(new StripeWebhookEvent.PaymentRefunded(eventId, paymentIntentId)));
+  }
+
+  private void stubPaymentRefundFailed(String eventId, String paymentIntentId) {
+    when(stripePaymentProvider.verifyAndParse(any(), eq("valid")))
+        .thenReturn(Optional.of(new StripeWebhookEvent.PaymentRefundFailed(eventId, paymentIntentId)));
+  }
+
+  private void stubVerifyEmpty() {
+    when(stripePaymentProvider.verifyAndParse(any(), eq("valid")))
+        .thenReturn(Optional.empty());
   }
 
   private Product product(String name, BigDecimal price, int discount, boolean enabled, long amount) {

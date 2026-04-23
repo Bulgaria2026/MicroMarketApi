@@ -57,6 +57,10 @@ public class Order extends ExtendedEntity {
   @Column(unique = true)
   private @Nullable String stripeCheckoutSessionId;
 
+  /** Stripe Payment Intent id ({@code pi_…}) */
+  @Column(unique = true)
+  private @Nullable String stripePaymentIntentId;
+
   @Column(nullable = false, precision = 10, scale = 2)
   private BigDecimal totalAmount;
 

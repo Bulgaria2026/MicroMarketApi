@@ -25,6 +25,9 @@ public class StripeWebhookService {
           orderSettlementService.handleCheckoutSucceeded(e.sessionId(), e.paymentIntentId());
       case StripeWebhookEvent.CheckoutFailed e -> orderSettlementService.handleCheckoutFailed(e.sessionId());
       case StripeWebhookEvent.CheckoutExpired e -> orderSettlementService.handleCheckoutExpired(e.sessionId());
+      case StripeWebhookEvent.PaymentRefunded e -> orderSettlementService.handlePaymentRefunded(e.paymentIntentId());
+      case StripeWebhookEvent.PaymentRefundFailed e ->
+          orderSettlementService.handlePaymentRefundFailed(e.paymentIntentId());
     }
   }
 }

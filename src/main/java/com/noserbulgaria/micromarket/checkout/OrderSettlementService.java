@@ -27,6 +27,7 @@ public class OrderSettlementService {
   @Transactional
   public void handleCheckoutSucceeded(String stripeCheckoutSessionId, String stripePaymentIntentId) {
     Order order = orderService.findByStripeCheckoutSessionIdOrThrow(stripeCheckoutSessionId);
+    order.setStripePaymentIntentId(stripePaymentIntentId);
     if (order.getStatus() != OrderStatusType.PENDING_PAYMENT) {
       log.info("Ignoring checkout.succeeded for order {} (status {})", order.getId(), order.getStatus());
       return;
@@ -68,6 +69,30 @@ public class OrderSettlementService {
       return;
     }
     order.transitionTo(OrderStatusType.CANCELLED);
+  }
+
+  @Transactional
+  public void handlePaymentRefunded(String stripePaymentIntentId) {
+    Order order = orderService.findByStripePaymentIntentIdOrThrow(stripePaymentIntentId);
+    if (order.getStatus() != OrderStatusType.PAID) {
+      log.info("Ignoring charge.refunded for order {} (status {})", order.getId(), order.getStatus());
+      return;
+    }
+    order.transitionTo(OrderStatusType.REFUNDED);
+    log.info("Order {} ({}) transitioned to REFUNDED from payment intent {}",
+        order.getId(), order.getOrderNumber(), stripePaymentIntentId);
+  }
+
+  @Transactional
+  public void handlePaymentRefundFailed(String stripePaymentIntentId) {
+    Order order = orderService.findByStripePaymentIntentIdOrThrow(stripePaymentIntentId);
+    if (order.getStatus() != OrderStatusType.REFUNDED) {
+      log.info("Ignoring refund.failed for order {} (status {})", order.getId(), order.getStatus());
+      return;
+    }
+    order.transitionTo(OrderStatusType.PAID);
+    log.info("Order {} ({}) reverted to PAID after refund failed on payment intent {}",
+        order.getId(), order.getOrderNumber(), stripePaymentIntentId);
   }
 
   private void rollbackDecrements(List<OrderItem> decremented) {
