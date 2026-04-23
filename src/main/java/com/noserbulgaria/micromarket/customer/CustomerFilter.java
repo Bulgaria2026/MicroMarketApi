@@ -10,6 +10,7 @@ public record CustomerFilter(
     @Nullable Instant createdFrom,
     @Nullable Instant createdTo,
     @Nullable String email,
+    @Nullable CustomerType type,
     @Nullable Role role,
     @Nullable AccountStatus status,
     @Nullable Long minPoints,
