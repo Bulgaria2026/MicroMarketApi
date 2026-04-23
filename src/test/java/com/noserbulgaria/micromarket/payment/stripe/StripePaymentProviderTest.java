@@ -3,12 +3,19 @@ package com.noserbulgaria.micromarket.payment.stripe;
 import com.noserbulgaria.micromarket.order.Order;
 import com.stripe.StripeClient;
 import com.stripe.model.Charge;
+import com.stripe.model.Coupon;
 import com.stripe.model.Event;
 import com.stripe.model.EventDataObjectDeserializer;
+import com.stripe.model.PromotionCode;
 import com.stripe.model.Refund;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.RequestOptions;
+import com.stripe.param.CouponCreateParams;
+import com.stripe.param.PromotionCodeCreateParams;
+import com.stripe.param.PromotionCodeUpdateParams;
 import com.stripe.param.checkout.SessionCreateParams;
+import com.stripe.service.CouponService;
+import com.stripe.service.PromotionCodeService;
 import com.stripe.service.CheckoutService;
 import com.stripe.service.V1Services;
 import com.stripe.service.checkout.SessionService;
@@ -36,6 +43,8 @@ class StripePaymentProviderTest {
   @Mock private V1Services v1Services;
   @Mock private CheckoutService checkoutService;
   @Mock private SessionService sessionService;
+  @Mock private CouponService couponService;
+  @Mock private PromotionCodeService promotionCodeService;
 
   private final StripeProperties properties = new StripeProperties(
       "sk_test_dummy", "whsec_test_dummy", "https://success", "https://cancel", 30);
@@ -79,6 +88,90 @@ class StripePaymentProviderTest {
     assertThat(params.getPaymentIntentData().getMetadata())
         .as("order_number must be on the PaymentIntent metadata (visible on Payments in the dashboard)")
         .containsEntry("order_number", "MM-123456");
+  }
+
+  @Test
+  void createManagedCoupon_setsStripeCouponAndPromotionCodeParams() throws Exception {
+    Coupon createdCoupon = new Coupon();
+    createdCoupon.setId("coupon_123");
+
+    PromotionCode createdPromotionCode = new PromotionCode();
+    createdPromotionCode.setId("promo_123");
+    createdPromotionCode.setCode("WELCOME-5");
+    createdPromotionCode.setTimesRedeemed(0L);
+    createdPromotionCode.setActive(true);
+
+    when(stripeClient.v1()).thenReturn(v1Services);
+    when(v1Services.coupons()).thenReturn(couponService);
+    when(v1Services.promotionCodes()).thenReturn(promotionCodeService);
+    when(couponService.create(any(CouponCreateParams.class))).thenReturn(createdCoupon);
+    when(promotionCodeService.create(any(PromotionCodeCreateParams.class))).thenReturn(createdPromotionCode);
+
+    provider.createManagedCoupon(new StripeManagedCouponRequest(
+        500L,
+        "WELCOME-5",
+        "Welcome coupon",
+        true,
+        java.time.Instant.parse("2026-12-31T23:59:59Z"),
+        10,
+        "cus_123"
+    ));
+
+    ArgumentCaptor<CouponCreateParams> couponCaptor = ArgumentCaptor.forClass(CouponCreateParams.class);
+    verify(couponService).create(couponCaptor.capture());
+    CouponCreateParams couponParams = couponCaptor.getValue();
+    assertThat(couponParams.getAmountOff()).isEqualTo(500L);
+    assertThat(couponParams.getCurrency()).isEqualTo("eur");
+    assertThat(couponParams.getDuration()).isEqualTo(CouponCreateParams.Duration.ONCE);
+    assertThat(couponParams.getName()).isEqualTo("Welcome coupon");
+
+    ArgumentCaptor<PromotionCodeCreateParams> promoCaptor = ArgumentCaptor.forClass(PromotionCodeCreateParams.class);
+    verify(promotionCodeService).create(promoCaptor.capture());
+    PromotionCodeCreateParams promoParams = promoCaptor.getValue();
+    assertThat(promoParams.getCode()).isEqualTo("WELCOME-5");
+    assertThat(promoParams.getCustomer()).isEqualTo("cus_123");
+    assertThat(promoParams.getMaxRedemptions()).isEqualTo(10L);
+    assertThat(promoParams.getPromotion()).isNotNull();
+    assertThat(promoParams.getPromotion().getCoupon()).isEqualTo("coupon_123");
+    assertThat(promoParams.getPromotion().getType()).isEqualTo(PromotionCodeCreateParams.Promotion.Type.COUPON);
+  }
+
+  @Test
+  void updatePromotionCodeActive_returnsUpdatedManagedCoupon() throws Exception {
+    PromotionCode promotionCode = new PromotionCode();
+    promotionCode.setId("promo_123");
+    promotionCode.setCode("WELCOME-5");
+    promotionCode.setTimesRedeemed(4L);
+    promotionCode.setActive(false);
+    PromotionCode.Promotion promotion = new PromotionCode.Promotion();
+    promotion.setCoupon("coupon_123");
+    promotionCode.setPromotion(promotion);
+
+    when(stripeClient.v1()).thenReturn(v1Services);
+    when(v1Services.promotionCodes()).thenReturn(promotionCodeService);
+    when(promotionCodeService.update(anyString(), any(PromotionCodeUpdateParams.class))).thenReturn(promotionCode);
+
+    StripeManagedCoupon result = provider.updatePromotionCodeActive("promo_123", false);
+
+    assertThat(result.stripeCouponId()).isEqualTo("coupon_123");
+    assertThat(result.stripePromotionCodeId()).isEqualTo("promo_123");
+    assertThat(result.code()).isEqualTo("WELCOME-5");
+    assertThat(result.timesRedeemed()).isEqualTo(4);
+    assertThat(result.active()).isFalse();
+
+    ArgumentCaptor<PromotionCodeUpdateParams> captor = ArgumentCaptor.forClass(PromotionCodeUpdateParams.class);
+    verify(promotionCodeService).update(org.mockito.ArgumentMatchers.eq("promo_123"), captor.capture());
+    assertThat(captor.getValue().getActive()).isFalse();
+  }
+
+  @Test
+  void deleteCoupon_deletesStripeCoupon() throws Exception {
+    when(stripeClient.v1()).thenReturn(v1Services);
+    when(v1Services.coupons()).thenReturn(couponService);
+
+    provider.deleteCoupon("coupon_123");
+
+    verify(couponService).delete("coupon_123");
   }
 
   @Test

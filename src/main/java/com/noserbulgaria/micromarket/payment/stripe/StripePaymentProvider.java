@@ -7,16 +7,24 @@ import com.stripe.StripeClient;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Charge;
+import com.stripe.model.Coupon;
 import com.stripe.model.Event;
+import com.stripe.model.PromotionCode;
 import com.stripe.model.Refund;
 import com.stripe.model.StripeObject;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.RequestOptions;
+import com.stripe.param.CouponCreateParams;
+import com.stripe.param.CouponUpdateParams;
 import com.stripe.param.CustomerCreateParams;
+import com.stripe.param.PromotionCodeCreateParams;
+import com.stripe.param.PromotionCodeUpdateParams;
+import com.stripe.param.common.EmptyParam;
 import com.stripe.param.RefundCreateParams;
 import com.stripe.param.checkout.SessionCreateParams;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -56,6 +64,63 @@ public class StripePaymentProvider {
     } catch (StripeException ex) {
       throw new IllegalStateException(
           "Failed to create Stripe customer for %s".formatted(email), ex);
+    }
+  }
+
+  public StripeManagedCoupon createManagedCoupon(StripeManagedCouponRequest request) {
+    Coupon coupon = createStripeCoupon(request);
+    try {
+      PromotionCode promotionCode = stripeClient.v1().promotionCodes().create(buildPromotionCodeParams(coupon.getId(), request));
+      return toManagedCoupon(coupon.getId(), promotionCode, request.code());
+    } catch (StripeException ex) {
+      try {
+        stripeClient.v1().coupons().delete(coupon.getId());
+      } catch (StripeException cleanupEx) {
+        log.warn("Failed to clean up Stripe coupon {} after promotion code creation failure", coupon.getId(), cleanupEx);
+      }
+      throw new IllegalStateException("Failed to create Stripe promotion code for coupon %s".formatted(coupon.getId()), ex);
+    }
+  }
+
+  public void updateCouponName(String stripeCouponId, @Nullable String name) {
+    CouponUpdateParams.Builder builder = CouponUpdateParams.builder();
+    if (name == null) {
+      builder.setName(EmptyParam.EMPTY);
+    } else {
+      builder.setName(name);
+    }
+    try {
+      stripeClient.v1().coupons().update(stripeCouponId, builder.build());
+    } catch (StripeException ex) {
+      throw new IllegalStateException("Failed to update Stripe coupon %s".formatted(stripeCouponId), ex);
+    }
+  }
+
+  public StripeManagedCoupon updatePromotionCodeActive(String stripePromotionCodeId, boolean active) {
+    PromotionCodeUpdateParams params = PromotionCodeUpdateParams.builder()
+        .setActive(active)
+        .build();
+    try {
+      PromotionCode promotionCode = stripeClient.v1().promotionCodes().update(stripePromotionCodeId, params);
+      String couponId = Optional.ofNullable(promotionCode.getPromotion())
+          .map(PromotionCode.Promotion::getCoupon)
+          .orElseThrow(() -> new IllegalStateException(
+              "Stripe promotion code %s has no coupon reference".formatted(stripePromotionCodeId)));
+      return toManagedCoupon(couponId, promotionCode, promotionCode.getCode());
+    } catch (StripeException ex) {
+      throw new IllegalStateException("Failed to update Stripe promotion code %s".formatted(stripePromotionCodeId), ex);
+    }
+  }
+
+  public void deactivatePromotionCode(String stripePromotionCodeId) {
+    updatePromotionCodeActive(stripePromotionCodeId, false);
+  }
+
+  public void deleteCoupon(String stripeCouponId) {
+    try {
+      stripeClient.v1().coupons().delete(stripeCouponId);
+    } catch (StripeException ex) {
+      throw new IllegalStateException("Failed to delete Stripe coupon %s".formatted(stripeCouponId), ex);
     }
   }
 
@@ -209,5 +274,49 @@ public class StripePaymentProvider {
               event.getId(), event.getType(), type.getSimpleName()));
     }
     return type.cast(data);
+  }
+
+  private Coupon createStripeCoupon(StripeManagedCouponRequest request) {
+    CouponCreateParams.Builder builder = CouponCreateParams.builder()
+        .setAmountOff(request.amountOff())
+        .setCurrency(CURRENCY)
+        .setDuration(CouponCreateParams.Duration.ONCE);
+    if (request.name() != null) {
+      builder.setName(request.name());
+    }
+    try {
+      return stripeClient.v1().coupons().create(builder.build());
+    } catch (StripeException ex) {
+      throw new IllegalStateException("Failed to create Stripe coupon for code %s".formatted(request.code()), ex);
+    }
+  }
+
+  private PromotionCodeCreateParams buildPromotionCodeParams(String stripeCouponId, StripeManagedCouponRequest request) {
+    PromotionCodeCreateParams.Builder builder = PromotionCodeCreateParams.builder()
+        .setPromotion(PromotionCodeCreateParams.Promotion.builder()
+            .setType(PromotionCodeCreateParams.Promotion.Type.COUPON)
+            .setCoupon(stripeCouponId)
+            .build())
+        .setCode(request.code())
+        .setActive(request.active());
+    if (request.stripeCustomerId() != null) {
+      builder.setCustomer(request.stripeCustomerId());
+    }
+    if (request.expiryDate() != null) {
+      builder.setExpiresAt(request.expiryDate().getEpochSecond());
+    }
+    if (request.maxRedemptions() != null) {
+      builder.setMaxRedemptions(request.maxRedemptions().longValue());
+    }
+    return builder.build();
+  }
+
+  private StripeManagedCoupon toManagedCoupon(String stripeCouponId, PromotionCode promotionCode, String fallbackCode) {
+    int timesRedeemed = Optional.ofNullable(promotionCode.getTimesRedeemed())
+        .map(Long::intValue)
+        .orElse(0);
+    boolean active = Boolean.TRUE.equals(promotionCode.getActive());
+    String code = Optional.ofNullable(promotionCode.getCode()).orElse(fallbackCode);
+    return new StripeManagedCoupon(stripeCouponId, promotionCode.getId(), code, timesRedeemed, active);
   }
 }
