@@ -46,6 +46,15 @@ jwt.private.key=file:./secrets/jwt/app.key
 
 Checkout requires a Stripe test-mode key and a running webhook listener. See [docs/stripe-dev.md](docs/stripe-dev.md) for the full setup.
 
+### GitHub Packages (email templates)
+
+The build pulls `com.noserbulgaria.micromarket:email-templates` from GitHub Packages, which requires auth even for public artifacts. Create a classic PAT with only the `read:packages` scope and add it to `~/.gradle/gradle.properties`:
+
+```properties
+gpr.user=<your-github-login>
+gpr.key=ghp_xxxxxxxxxxxxxxxxxxxx
+```
+
 ---
 
 ## Running the Application
