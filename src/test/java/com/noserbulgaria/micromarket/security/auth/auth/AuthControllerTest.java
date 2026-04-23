@@ -1,6 +1,7 @@
 package com.noserbulgaria.micromarket.security.auth.auth;
 
-import com.noserbulgaria.micromarket.security.user.Role;
+import com.noserbulgaria.micromarket.security.user.AccountStatus;
+import com.noserbulgaria.micromarket.security.auth.refresh.RefreshTokenRepository;
 import com.noserbulgaria.micromarket.security.user.User;
 import com.noserbulgaria.micromarket.security.user.UserRepository;
 import jakarta.servlet.http.Cookie;
@@ -11,7 +12,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -41,17 +41,15 @@ class AuthControllerTest {
   private UserRepository userRepository;
 
   @Autowired
-  private PasswordEncoder passwordEncoder;
+  private RefreshTokenRepository refreshTokenRepository;
 
   @BeforeEach
   void setUp() {
-    userRepository.deleteAll();
+    refreshTokenRepository.deleteAll();
 
-    User user = new User();
-    user.setEmail("user@micromarket.dev");
-    user.setPassword(Objects.requireNonNull(passwordEncoder.encode("user123")));
-    user.setRole(Role.USER);
-    userRepository.save(user);
+    User user = userRepository.findByEmail("user@micromarket.dev").orElseThrow();
+    user.setStatus(AccountStatus.ACTIVE);
+    userRepository.saveAndFlush(user);
   }
 
   // --- Login tests ---
@@ -92,6 +90,23 @@ class AuthControllerTest {
                 {"email": "nobody@micromarket.dev", "password": "whatever"}
                 """))
         .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void loginWithInactiveUser_returns401AndDoesNotIssueTokens() throws Exception {
+    deactivateTestUser();
+
+    mockMvc.perform(post("/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"email": "user@micromarket.dev", "password": "user123"}
+                """))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.title").value("Unauthorized"))
+        .andExpect(jsonPath("$.status").value(401))
+        .andExpect(jsonPath("$.detail").value("Authentication is required to access '/auth/login'."))
+        .andExpect(jsonPath("$.instance").value("/auth/login"))
+        .andExpect(jsonPath("$.accessToken").doesNotExist());
   }
 
   @Test
@@ -193,6 +208,21 @@ class AuthControllerTest {
   }
 
   @Test
+  void refreshWithDeactivatedUser_returns401() throws Exception {
+    String originalRefresh = loginAndCaptureRefreshToken();
+    deactivateTestUser();
+
+    mockMvc.perform(post("/auth/refresh")
+            .cookie(new Cookie(REFRESH_COOKIE_NAME, originalRefresh)))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.title").value("Unauthorized"))
+        .andExpect(jsonPath("$.status").value(401))
+        .andExpect(jsonPath("$.detail").value("Invalid or expired refresh token"))
+        .andExpect(jsonPath("$.instance").value("/auth/refresh"))
+        .andExpect(jsonPath("$.accessToken").doesNotExist());
+  }
+
+  @Test
   void refreshWithReusedToken_revokesFamilyAndReturns401() throws Exception {
     String originalRefresh = loginAndCaptureRefreshToken();
 
@@ -281,5 +311,11 @@ class AuthControllerTest {
   private String refreshTokenFrom(MvcResult result) {
     Cookie cookie = result.getResponse().getCookie(REFRESH_COOKIE_NAME);
     return Objects.requireNonNull(cookie, "Missing refresh cookie in response").getValue();
+  }
+
+  private void deactivateTestUser() {
+    User user = userRepository.findByEmail("user@micromarket.dev").orElseThrow();
+    user.setStatus(AccountStatus.INACTIVE);
+    userRepository.saveAndFlush(user);
   }
 }

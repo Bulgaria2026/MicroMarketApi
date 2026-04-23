@@ -1,0 +1,27 @@
+databaseChangeLog:
+  - changeSet:
+      id: 202604201435-1
+      author: BambusTM
+      context: dev
+      changes:
+        - update:
+            tableName: profile
+            columns:
+              - column:
+                  name: points
+                  valueNumeric: 0
+            where: user_id = 'a0000000-0000-0000-0000-000000000001'
+        - update:
+            tableName: profile
+            columns:
+              - column:
+                  name: points
+                  valueNumeric: 10
+            where: user_id = 'b0000000-0000-0000-0000-000000000001'
+        - update:
+            tableName: profile
+            columns:
+              - column:
+                  name: points
+                  valueNumeric: 1000
+            where: user_id = 'c0000000-0000-0000-0000-000000000001'
