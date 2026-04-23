@@ -137,6 +137,27 @@ class CustomerControllerTest {
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void getAll_withGuestTypeFilter_returnsOnlyGuests() throws Exception {
+    mockMvc.perform(get("/customer")
+            .param("type", CustomerType.GUEST.name()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].id").value(guestCustomer.getId().toString()))
+        .andExpect(jsonPath("$.content[0].type").value(CustomerType.GUEST.name()));
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void getAll_withProfileTypeFilter_returnsOnlyProfiles() throws Exception {
+    mockMvc.perform(get("/customer")
+            .param("type", CustomerType.PROFILE.name()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(3))
+        .andExpect(jsonPath("$.content[*].type").value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(CustomerType.PROFILE.name()))));
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_withRoleFilter_returnsOnlyMatchingProfiles() throws Exception {
     mockMvc.perform(get("/customer")
             .param("role", Role.ADMINISTRATOR.name()))

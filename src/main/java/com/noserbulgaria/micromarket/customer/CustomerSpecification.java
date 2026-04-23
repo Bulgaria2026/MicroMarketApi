@@ -18,10 +18,22 @@ public class CustomerSpecification {
         greaterThanOrEqualTo(Customer_.createdAt, filter.createdFrom()),
         lessThanOrEqualTo(Customer_.createdAt, filter.createdTo()),
         emailContains(filter.email()),
+        typeEquals(filter.type()),
         profileRoleEquals(filter.role()),
         profileStatusEquals(filter.status()),
         profilePointsBetween(filter.minPoints(), filter.maxPoints())
     );
+  }
+
+  private static Specification<Customer> typeEquals(@Nullable CustomerType type) {
+    if (type == null) {
+      return Specification.unrestricted();
+    }
+
+    return switch (type) {
+      case GUEST -> (root, _, cb) -> cb.equal(root.type(), Guest.class);
+      case PROFILE -> (root, _, cb) -> cb.equal(root.type(), Profile.class);
+    };
   }
 
   private static Specification<Customer> emailContains(@Nullable String email) {
