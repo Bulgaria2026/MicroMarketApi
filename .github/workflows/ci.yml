@@ -30,6 +30,9 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run tests
+        env:
+          GITHUB_USERNAME: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./gradlew test --no-daemon
 
       - name: Publish test results
