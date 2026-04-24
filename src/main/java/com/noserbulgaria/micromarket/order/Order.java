@@ -52,6 +52,12 @@ public class Order extends ExtendedEntity {
   @JoinColumn(name = "coupon_id")
   private @Nullable Coupon appliedCoupon;
 
+  @Column(length = 500)
+  private @Nullable String couponCode;
+
+  @Column(precision = 10, scale = 2)
+  private @Nullable BigDecimal couponAmountOff;
+
   /**
    * Snapshot of the recipient email at order time. Survives later customer-record changes so receipts remain
    * reconstructible.

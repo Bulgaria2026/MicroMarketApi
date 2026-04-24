@@ -11,6 +11,7 @@ import org.mapstruct.ReportingPolicy;
 )
 public interface CouponMapper {
 
+  @Mapping(target = "couponOfferId", source = "couponOffer.id")
   @Mapping(target = "userId", source = "user.id")
   CouponResponse toDto(Coupon coupon);
 }

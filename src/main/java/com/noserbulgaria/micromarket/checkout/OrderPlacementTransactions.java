@@ -1,11 +1,17 @@
 package com.noserbulgaria.micromarket.checkout;
 
 import com.noserbulgaria.micromarket.auth.user.CustomUserDetails;
+import com.noserbulgaria.micromarket.coupon.Coupon;
+import com.noserbulgaria.micromarket.coupon.CouponService;
 import com.noserbulgaria.micromarket.customer.Customer;
 import com.noserbulgaria.micromarket.customer.CustomerRepository;
 import com.noserbulgaria.micromarket.customer.CustomerResolver;
 import com.noserbulgaria.micromarket.exception.BadRequestApiException;
-import com.noserbulgaria.micromarket.order.*;
+import com.noserbulgaria.micromarket.order.Order;
+import com.noserbulgaria.micromarket.order.OrderItem;
+import com.noserbulgaria.micromarket.order.OrderNumberGenerator;
+import com.noserbulgaria.micromarket.order.OrderRepository;
+import com.noserbulgaria.micromarket.order.OrderStatusType;
 import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
 import com.noserbulgaria.micromarket.product.Product;
 import com.noserbulgaria.micromarket.product.ProductRepository;
@@ -17,7 +23,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 
 /** Split into a separate bean so each {@code @Transactional} goes through the proxy (self-invocation wouldn't). */
 @Service
@@ -30,6 +41,7 @@ public class OrderPlacementTransactions {
   private final OrderRepository orderRepository;
   private final CustomerRepository customerRepository;
   private final CustomerResolver customerResolver;
+  private final CouponService couponService;
   private final StripePaymentProvider stripePaymentProvider;
   private final OrderNumberGenerator orderNumberGenerator;
 
@@ -41,16 +53,22 @@ public class OrderPlacementTransactions {
   public Order createPendingOrder(PlaceOrderRequest request, @Nullable CustomUserDetails userDetails) {
     List<ResolvedItem> items = resolveItems(request.items());
     Customer customer = customerResolver.resolveForCheckout(userDetails, request.email());
+    Coupon coupon = couponService.resolveForCheckout(request.couponId(), userDetails, customer.getId());
     String email = resolveEmail(userDetails, request);
 
-    BigDecimal total = items.stream()
+    BigDecimal subtotal = items.stream()
         .map(this::itemTotal)
         .reduce(BigDecimal.ZERO, BigDecimal::add);
+    BigDecimal couponAmountOff = appliedCouponDiscount(coupon, subtotal);
+    BigDecimal total = subtotal.subtract(couponAmountOff).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
 
     Order order = Order.builder()
         .orderNumber(orderNumberGenerator.next())
         .status(OrderStatusType.PENDING_PAYMENT)
         .customer(customer)
+        .appliedCoupon(coupon)
+        .couponCode(coupon == null ? null : coupon.getCode())
+        .couponAmountOff(coupon == null ? null : couponAmountOff)
         .email(email)
         .totalAmount(total)
         .build();
@@ -146,5 +164,12 @@ public class OrderPlacementTransactions {
     }
     BigDecimal multiplier = ONE_HUNDRED.subtract(BigDecimal.valueOf(product.getDiscount()));
     return product.getPrice().multiply(multiplier).divide(ONE_HUNDRED, 2, RoundingMode.HALF_UP);
+  }
+
+  private BigDecimal appliedCouponDiscount(@Nullable Coupon coupon, BigDecimal subtotal) {
+    if (coupon == null) {
+      return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+    }
+    return coupon.getAmountOff().min(subtotal).setScale(2, RoundingMode.HALF_UP);
   }
 }

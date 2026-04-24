@@ -19,6 +19,12 @@ public record OrderResponse(
 
     String email,
 
+    @Nullable UUID couponId,
+
+    @Nullable String couponCode,
+
+    @Nullable BigDecimal couponAmountOff,
+
     @Nullable String stripeCheckoutSessionId,
 
     BigDecimal totalAmount,

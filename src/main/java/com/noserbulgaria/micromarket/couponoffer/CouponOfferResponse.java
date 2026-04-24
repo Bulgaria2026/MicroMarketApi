@@ -1,4 +1,4 @@
-package com.noserbulgaria.micromarket.coupon;
+package com.noserbulgaria.micromarket.couponoffer;
 
 import org.jspecify.annotations.Nullable;
 
@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-public record CouponResponse(
+public record CouponOfferResponse(
 
     UUID id,
 
@@ -14,13 +14,9 @@ public record CouponResponse(
 
     Instant updatedAt,
 
-    @Nullable UUID couponOfferId,
+    String name,
 
-    @Nullable UUID userId,
-
-    String code,
-
-    @Nullable String name,
+    @Nullable String description,
 
     @Nullable Instant startDate,
 
@@ -30,9 +26,9 @@ public record CouponResponse(
 
     BigDecimal amountOff,
 
-    @Nullable Integer maxRedemptions,
+    @Nullable Integer maxPurchases,
 
-    int timesRedeemed,
+    int purchaseCount,
 
     boolean active
 ) {

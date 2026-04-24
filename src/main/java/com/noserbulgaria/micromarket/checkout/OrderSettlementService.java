@@ -1,5 +1,6 @@
 package com.noserbulgaria.micromarket.checkout;
 
+import com.noserbulgaria.micromarket.coupon.CouponService;
 import com.noserbulgaria.micromarket.order.Order;
 import com.noserbulgaria.micromarket.order.OrderItem;
 import com.noserbulgaria.micromarket.order.OrderService;
@@ -23,6 +24,7 @@ public class OrderSettlementService {
   private final OrderService orderService;
   private final ProductRepository productRepository;
   private final StripePaymentProvider stripePaymentProvider;
+  private final CouponService couponService;
 
   @Transactional
   public void handleCheckoutSucceeded(String stripeCheckoutSessionId, String stripePaymentIntentId) {
@@ -35,8 +37,8 @@ public class OrderSettlementService {
 
     List<OrderItem> decremented = new ArrayList<>();
     for (OrderItem item : order.getOrderItems()) {
-      int affected = productRepository.tryDecrementStock(item.getProduct().getId(), item.getQuantity());
-      if (affected != 1) {
+      var product = productRepository.findByIdForUpdate(item.getProduct().getId()).orElseThrow();
+      if (product.getAmount() < item.getQuantity()) {
         rollbackDecrements(decremented);
         log.warn(
             "Stock exhausted for product {} while settling order {} — cancelling + refunding",
@@ -46,8 +48,10 @@ public class OrderSettlementService {
         stripePaymentProvider.refund(stripePaymentIntentId);
         return;
       }
+      product.setAmount(product.getAmount() - item.getQuantity());
       decremented.add(item);
     }
+    couponService.markRedeemed(order);
     order.transitionTo(OrderStatusType.PAID);
   }
 
@@ -79,8 +83,10 @@ public class OrderSettlementService {
       return;
     }
     order.transitionTo(OrderStatusType.REFUNDED);
-    log.info("Order {} ({}) transitioned to REFUNDED from payment intent {}",
-        order.getId(), order.getOrderNumber(), stripePaymentIntentId);
+    log.info(
+        "Order {} ({}) transitioned to REFUNDED from payment intent {}",
+        order.getId(), order.getOrderNumber(), stripePaymentIntentId
+    );
   }
 
   @Transactional
@@ -91,13 +97,16 @@ public class OrderSettlementService {
       return;
     }
     order.transitionTo(OrderStatusType.PAID);
-    log.info("Order {} ({}) reverted to PAID after refund failed on payment intent {}",
-        order.getId(), order.getOrderNumber(), stripePaymentIntentId);
+    log.info(
+        "Order {} ({}) reverted to PAID after refund failed on payment intent {}",
+        order.getId(), order.getOrderNumber(), stripePaymentIntentId
+    );
   }
 
   private void rollbackDecrements(List<OrderItem> decremented) {
     for (OrderItem item : decremented) {
-      productRepository.tryDecrementStock(item.getProduct().getId(), -item.getQuantity());
+      productRepository.findByIdForUpdate(item.getProduct().getId())
+          .ifPresent(product -> product.setAmount(product.getAmount() + item.getQuantity()));
     }
   }
 }

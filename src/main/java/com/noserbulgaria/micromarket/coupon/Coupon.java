@@ -2,6 +2,7 @@ package com.noserbulgaria.micromarket.coupon;
 
 import com.noserbulgaria.micromarket.auth.user.User;
 import com.noserbulgaria.micromarket.common.ExtendedEntity;
+import com.noserbulgaria.micromarket.couponoffer.CouponOffer;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -41,6 +42,13 @@ public class Coupon extends ExtendedEntity {
   @JoinColumn(name = "user_id")
   private @Nullable User user;
 
+  @Audited(targetAuditMode = RelationTargetAuditMode.NOT_AUDITED)
+  @EqualsAndHashCode.Exclude
+  @ToString.Exclude
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "coupon_offer_id")
+  private @Nullable CouponOffer couponOffer;
+
   @Column(nullable = false, unique = true, length = 500)
   private String code;
 
@@ -68,7 +76,7 @@ public class Coupon extends ExtendedEntity {
   @Builder.Default
   private boolean active = true;
 
-  @Column(nullable = false, unique = true)
+  @Column(nullable = false)
   private String stripeCouponId;
 
   @Column(nullable = false, unique = true)

@@ -91,6 +91,28 @@ class StripePaymentProviderTest {
   }
 
   @Test
+  void createCoupon_usesHardcodedEuroCurrency() throws Exception {
+    Coupon createdCoupon = new Coupon();
+    createdCoupon.setId("coupon_123");
+
+    when(stripeClient.v1()).thenReturn(v1Services);
+    when(v1Services.coupons()).thenReturn(couponService);
+    when(couponService.create(any(CouponCreateParams.class))).thenReturn(createdCoupon);
+
+    String result = provider.createCoupon(500L, "Welcome coupon");
+
+    assertThat(result).isEqualTo("coupon_123");
+
+    ArgumentCaptor<CouponCreateParams> captor = ArgumentCaptor.forClass(CouponCreateParams.class);
+    verify(couponService).create(captor.capture());
+    CouponCreateParams params = captor.getValue();
+    assertThat(params.getAmountOff()).isEqualTo(500L);
+    assertThat(params.getCurrency()).isEqualTo("eur");
+    assertThat(params.getDuration()).isEqualTo(CouponCreateParams.Duration.ONCE);
+    assertThat(params.getName()).isEqualTo("Welcome coupon");
+  }
+
+  @Test
   void createManagedCoupon_setsStripeCouponAndPromotionCodeParams() throws Exception {
     Coupon createdCoupon = new Coupon();
     createdCoupon.setId("coupon_123");
@@ -134,6 +156,66 @@ class StripePaymentProviderTest {
     assertThat(promoParams.getPromotion()).isNotNull();
     assertThat(promoParams.getPromotion().getCoupon()).isEqualTo("coupon_123");
     assertThat(promoParams.getPromotion().getType()).isEqualTo(PromotionCodeCreateParams.Promotion.Type.COUPON);
+  }
+
+  @Test
+  void createPromotionCode_setsCustomerRestrictionAndUsageLimits() throws Exception {
+    PromotionCode createdPromotionCode = new PromotionCode();
+    createdPromotionCode.setId("promo_123");
+    createdPromotionCode.setCode("WELCOME-5");
+    createdPromotionCode.setTimesRedeemed(0L);
+    createdPromotionCode.setActive(true);
+
+    when(stripeClient.v1()).thenReturn(v1Services);
+    when(v1Services.promotionCodes()).thenReturn(promotionCodeService);
+    when(promotionCodeService.create(any(PromotionCodeCreateParams.class))).thenReturn(createdPromotionCode);
+
+    StripeManagedCoupon result = provider.createPromotionCode("coupon_123", new StripePromotionCodeRequest(
+        "WELCOME-5",
+        true,
+        java.time.Instant.parse("2026-12-31T23:59:59Z"),
+        1,
+        "cus_123"
+    ));
+
+    assertThat(result.stripeCouponId()).isEqualTo("coupon_123");
+    assertThat(result.stripePromotionCodeId()).isEqualTo("promo_123");
+    assertThat(result.code()).isEqualTo("WELCOME-5");
+
+    ArgumentCaptor<PromotionCodeCreateParams> captor = ArgumentCaptor.forClass(PromotionCodeCreateParams.class);
+    verify(promotionCodeService).create(captor.capture());
+    PromotionCodeCreateParams params = captor.getValue();
+    assertThat(params.getCustomer()).isEqualTo("cus_123");
+    assertThat(params.getMaxRedemptions()).isEqualTo(1L);
+    assertThat(params.getCode()).isEqualTo("WELCOME-5");
+  }
+
+  @Test
+  void createCheckoutSession_withCouponAddsPromotionCodeDiscount() throws Exception {
+    UUID orderId = UUID.randomUUID();
+    Order order = new Order();
+    order.setId(orderId);
+    order.setOrderNumber("MM-123456");
+    com.noserbulgaria.micromarket.coupon.Coupon coupon = new com.noserbulgaria.micromarket.coupon.Coupon();
+    coupon.setStripePromotionCodeId("promo_123");
+    order.setAppliedCoupon(coupon);
+
+    Session resultSession = new Session();
+    resultSession.setId("cs_test_abc");
+    resultSession.setUrl("https://checkout.stripe.test/cs_test_abc");
+
+    when(stripeClient.v1()).thenReturn(v1Services);
+    when(v1Services.checkout()).thenReturn(checkoutService);
+    when(checkoutService.sessions()).thenReturn(sessionService);
+    when(sessionService.create(any(SessionCreateParams.class), any(RequestOptions.class)))
+        .thenReturn(resultSession);
+
+    provider.createCheckoutSession(order, "cus_test");
+
+    ArgumentCaptor<SessionCreateParams> captor = ArgumentCaptor.forClass(SessionCreateParams.class);
+    verify(sessionService).create(captor.capture(), any(RequestOptions.class));
+    assertThat(captor.getValue().getDiscounts()).hasSize(1);
+    assertThat(captor.getValue().getDiscounts().getFirst().getPromotionCode()).isEqualTo("promo_123");
   }
 
   @Test

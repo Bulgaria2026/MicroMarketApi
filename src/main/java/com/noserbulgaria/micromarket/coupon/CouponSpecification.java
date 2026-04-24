@@ -7,11 +7,16 @@ import org.springframework.data.jpa.domain.Specification;
 
 import java.util.UUID;
 
+import static com.noserbulgaria.micromarket.common.SpecificationBuilder.equalTo;
+
 @UtilityClass
 public class CouponSpecification {
 
   public static Specification<Coupon> withFilter(CouponFilter filter) {
-    return Specification.allOf(userIdEquals(filter.userId()));
+    return Specification.allOf(
+        userIdEquals(filter.userId()),
+        equalTo(Coupon_.active, filter.active())
+    );
   }
 
   private static Specification<Coupon> userIdEquals(@Nullable UUID userId) {

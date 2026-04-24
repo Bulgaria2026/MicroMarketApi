@@ -1,15 +1,21 @@
 package com.noserbulgaria.micromarket.coupon;
 
+import com.noserbulgaria.micromarket.auth.user.CustomUserDetails;
 import com.noserbulgaria.micromarket.auth.user.User;
 import com.noserbulgaria.micromarket.auth.user.UserRepository;
+import com.noserbulgaria.micromarket.couponoffer.CouponOffer;
 import com.noserbulgaria.micromarket.customer.Profile;
 import com.noserbulgaria.micromarket.customer.ProfileRepository;
 import com.noserbulgaria.micromarket.exception.BadRequestApiException;
 import com.noserbulgaria.micromarket.exception.ConflictApiException;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
+import com.noserbulgaria.micromarket.order.Order;
+import com.noserbulgaria.micromarket.order.OrderRepository;
+import com.noserbulgaria.micromarket.order.OrderStatusType;
 import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCoupon;
 import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCouponRequest;
 import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
+import com.noserbulgaria.micromarket.payment.stripe.StripePromotionCodeRequest;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -22,7 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -30,15 +38,30 @@ import java.util.UUID;
 @Transactional
 public class CouponService {
 
+  private static final EnumSet<OrderStatusType> USER_USAGE_STATUSES =
+      EnumSet.of(OrderStatusType.PENDING_PAYMENT, OrderStatusType.PAID, OrderStatusType.REFUNDED);
+
   private final CouponRepository couponRepository;
   private final UserRepository userRepository;
   private final ProfileRepository profileRepository;
   private final CouponMapper couponMapper;
   private final StripePaymentProvider stripePaymentProvider;
+  private final OrderRepository orderRepository;
 
   @Transactional(readOnly = true)
   public Page<CouponResponse> findAll(Specification<Coupon> spec, Pageable pageable) {
     return couponRepository.findAll(spec, pageable)
+        .map(couponMapper::toDto);
+  }
+
+  @Transactional(readOnly = true)
+  public Page<CouponResponse> findOwn(UUID userId, @Nullable Boolean active, Pageable pageable) {
+    return couponRepository.findAll(
+            Specification.allOf(
+                (root, _, cb) -> cb.equal(root.get(Coupon_.user).get("id"), userId),
+                active == null ? Specification.unrestricted() : (root, _, cb) -> cb.equal(root.get(Coupon_.active), active)
+            ),
+            pageable)
         .map(couponMapper::toDto);
   }
 
@@ -50,8 +73,8 @@ public class CouponService {
   }
 
   public CouponResponse create(CouponRequest request) {
-    ResolvedCouponInput input = resolveInputForCreate(request);
-    StripeManagedCoupon stripeCoupon = stripePaymentProvider.createManagedCoupon(toStripeRequest(input));
+    ResolvedCouponInput input = resolveDirectCouponInputForCreate(request);
+    StripeManagedCoupon stripeCoupon = stripePaymentProvider.createManagedCoupon(toManagedCouponRequest(input));
 
     Coupon coupon = new Coupon();
     applyLocalState(coupon, input);
@@ -63,16 +86,19 @@ public class CouponService {
   public CouponResponse updateOrThrow(UUID id, CouponRequest request) {
     Coupon coupon = couponRepository.findById(id)
         .orElseThrow(() -> new NotFoundApiException("Coupon with id '%s' not found".formatted(id)));
+    if (coupon.getCouponOffer() != null) {
+      throw new BadRequestApiException("Purchased coupons cannot be updated manually");
+    }
 
-    ResolvedCouponInput input = resolveInputForUpdate(coupon, request);
+    ResolvedCouponInput input = resolveDirectCouponInputForUpdate(coupon, request);
 
     if (requiresStripeRotation(coupon, input)) {
       stripePaymentProvider.deactivatePromotionCode(coupon.getStripePromotionCodeId());
-      StripeManagedCoupon stripeCoupon = stripePaymentProvider.createManagedCoupon(toStripeRequest(input));
+      StripeManagedCoupon stripeCoupon = stripePaymentProvider.createManagedCoupon(toManagedCouponRequest(input));
       stripePaymentProvider.deleteCoupon(coupon.getStripeCouponId());
       applyStripeState(coupon, stripeCoupon);
     } else {
-      if (!nullableEquals(coupon.getName(), input.name())) {
+      if (nullableEquals(coupon.getName(), input.name())) {
         stripePaymentProvider.updateCouponName(coupon.getStripeCouponId(), input.name());
       }
       if (coupon.isActive() != input.active()) {
@@ -86,7 +112,97 @@ public class CouponService {
     return couponMapper.toDto(couponRepository.saveAndFlush(coupon));
   }
 
+  public CouponResponse issuePurchasedCoupon(CouponOffer couponOffer, User user) {
+    String code = generateCouponCode();
+    ensureCodeAvailable(code, null);
+
+    StripeManagedCoupon stripeCoupon = stripePaymentProvider.createPromotionCode(
+        couponOffer.getStripeCouponId(),
+        new StripePromotionCodeRequest(
+            code,
+            true,
+            couponOffer.getExpiryDate(),
+            1,
+            ensureStripeCustomerId(user)
+        )
+    );
+
+    Coupon coupon = Coupon.builder()
+        .couponOffer(couponOffer)
+        .user(user)
+        .code(stripeCoupon.code())
+        .name(couponOffer.getName())
+        .startDate(couponOffer.getStartDate())
+        .expiryDate(couponOffer.getExpiryDate())
+        .pointCost(couponOffer.getPointCost())
+        .amountOff(couponOffer.getAmountOff())
+        .maxRedemptions(1)
+        .timesRedeemed(stripeCoupon.timesRedeemed())
+        .active(stripeCoupon.active())
+        .stripeCouponId(couponOffer.getStripeCouponId())
+        .stripePromotionCodeId(stripeCoupon.stripePromotionCodeId())
+        .build();
+
+    return couponMapper.toDto(couponRepository.saveAndFlush(coupon));
+  }
+
+  @Transactional(readOnly = true)
+  public @Nullable Coupon resolveForCheckout(@Nullable UUID couponId, @Nullable CustomUserDetails userDetails, UUID customerId) {
+    if (couponId == null) {
+      return null;
+    }
+    if (userDetails == null) {
+      throw new BadRequestApiException("Coupons require authenticated checkout");
+    }
+
+    Coupon coupon = couponRepository.findById(couponId)
+        .orElseThrow(() -> new NotFoundApiException("Coupon with id '%s' not found".formatted(couponId)));
+
+    validateForCheckout(coupon, userDetails.getId(), customerId);
+    return coupon;
+  }
+
+  public void markRedeemed(Order order) {
+    Coupon coupon = order.getAppliedCoupon();
+    if (coupon == null) {
+      return;
+    }
+
+    int nextTimesRedeemed = coupon.getTimesRedeemed() + 1;
+    coupon.setTimesRedeemed(nextTimesRedeemed);
+    Integer maxRedemptions = coupon.getMaxRedemptions();
+    if (maxRedemptions != null && nextTimesRedeemed >= maxRedemptions && coupon.isActive()) {
+      coupon.setActive(false);
+      stripePaymentProvider.deactivatePromotionCode(coupon.getStripePromotionCodeId());
+    }
+    couponRepository.save(coupon);
+  }
+
+  private void validateForCheckout(Coupon coupon, UUID userId, UUID customerId) {
+    Instant now = Instant.now();
+    if (!coupon.isActive()) {
+      throw new BadRequestApiException("Coupon is inactive");
+    }
+    if (coupon.getStartDate() != null && coupon.getStartDate().isAfter(now)) {
+      throw new BadRequestApiException("Coupon is not yet active");
+    }
+    if (coupon.getExpiryDate() != null && !coupon.getExpiryDate().isAfter(now)) {
+      throw new BadRequestApiException("Coupon has expired");
+    }
+    if (coupon.getUser() != null && !coupon.getUser().getId().equals(userId)) {
+      throw new BadRequestApiException("Coupon cannot be used by the current user");
+    }
+    Integer maxRedemptions = coupon.getMaxRedemptions();
+    if (maxRedemptions != null && coupon.getTimesRedeemed() >= maxRedemptions) {
+      throw new BadRequestApiException("Coupon has no remaining redemptions");
+    }
+    if (orderRepository.existsByAppliedCouponIdAndCustomerIdAndStatusIn(coupon.getId(), customerId, USER_USAGE_STATUSES)) {
+      throw new BadRequestApiException("Coupon can only be used once per user");
+    }
+  }
+
   private void applyLocalState(Coupon coupon, ResolvedCouponInput input) {
+    coupon.setCouponOffer(null);
     coupon.setUser(input.user());
     coupon.setCode(input.code());
     coupon.setName(input.name());
@@ -109,12 +225,12 @@ public class CouponService {
   private boolean requiresStripeRotation(Coupon coupon, ResolvedCouponInput input) {
     return !coupon.getAmountOff().equals(input.amountOff())
         || !coupon.getCode().equals(input.code())
-        || !nullableEquals(coupon.getExpiryDate(), input.expiryDate())
-        || !nullableEquals(coupon.getMaxRedemptions(), input.maxRedemptions())
-        || !nullableEquals(userId(coupon.getUser()), userId(input.user()));
+        || nullableEquals(coupon.getExpiryDate(), input.expiryDate())
+        || nullableEquals(coupon.getMaxRedemptions(), input.maxRedemptions())
+        || nullableEquals(userId(coupon.getUser()), userId(input.user()));
   }
 
-  private ResolvedCouponInput resolveInputForCreate(CouponRequest request) {
+  private ResolvedCouponInput resolveDirectCouponInputForCreate(CouponRequest request) {
     User user = resolveUser(request.userId());
     validateDates(request.startDate(), request.expiryDate());
     String code = request.code() != null ? normalizeCode(request.code()) : generateCouponCode();
@@ -125,14 +241,14 @@ public class CouponService {
         normalizeName(request.name()),
         request.startDate(),
         request.expiryDate(),
-        request.pointCost(),
+        request.pointCost() == null ? 0 : request.pointCost(),
         normalizeAmountOff(request.amountOff()),
-        request.maxRedemptions(),
+        normalizeMaxRedemptions(user, request.maxRedemptions()),
         request.active() == null || request.active()
     );
   }
 
-  private ResolvedCouponInput resolveInputForUpdate(Coupon coupon, CouponRequest request) {
+  private ResolvedCouponInput resolveDirectCouponInputForUpdate(Coupon coupon, CouponRequest request) {
     User user = resolveUser(request.userId());
     validateDates(request.startDate(), request.expiryDate());
     String code = request.code() != null ? normalizeCode(request.code()) : coupon.getCode();
@@ -143,10 +259,22 @@ public class CouponService {
         normalizeName(request.name()),
         request.startDate(),
         request.expiryDate(),
-        request.pointCost(),
+        request.pointCost() == null ? 0 : request.pointCost(),
         normalizeAmountOff(request.amountOff()),
-        request.maxRedemptions(),
+        normalizeMaxRedemptions(user, request.maxRedemptions()),
         request.active() != null ? request.active() : coupon.isActive()
+    );
+  }
+
+  private StripeManagedCouponRequest toManagedCouponRequest(ResolvedCouponInput input) {
+    return new StripeManagedCouponRequest(
+        amountOffInMinorUnits(input.amountOff()),
+        input.code(),
+        input.name(),
+        input.active(),
+        input.expiryDate(),
+        input.maxRedemptions(),
+        input.user() == null ? null : ensureStripeCustomerId(input.user())
     );
   }
 
@@ -158,23 +286,7 @@ public class CouponService {
         .orElseThrow(() -> new NotFoundApiException("User with id '%s' not found".formatted(userId)));
   }
 
-  private StripeManagedCouponRequest toStripeRequest(ResolvedCouponInput input) {
-    return new StripeManagedCouponRequest(
-        amountOffInMinorUnits(input.amountOff()),
-        input.code(),
-        input.name(),
-        input.active(),
-        input.expiryDate(),
-        input.maxRedemptions(),
-        ensureStripeCustomerId(input.user())
-    );
-  }
-
-  private @Nullable String ensureStripeCustomerId(@Nullable User user) {
-    if (user == null) {
-      return null;
-    }
-
+  public String ensureStripeCustomerId(User user) {
     Profile profile = profileRepository.findByUserId(user.getId())
         .orElseGet(() -> createProfileOrReload(user));
     if (profile.getStripeCustomerId() != null) {
@@ -209,7 +321,7 @@ public class CouponService {
     String candidate;
     do {
       String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
-      candidate = "MM-" + suffix + "-MM";
+      candidate = "MM-" + suffix;
     } while (couponRepository.existsByCode(candidate));
     return candidate;
   }
@@ -238,6 +350,13 @@ public class CouponService {
     }
   }
 
+  private @Nullable Integer normalizeMaxRedemptions(@Nullable User user, @Nullable Integer maxRedemptions) {
+    if (user != null) {
+      return 1;
+    }
+    return maxRedemptions;
+  }
+
   private long amountOffInMinorUnits(BigDecimal amountOff) {
     return amountOff.movePointRight(2).longValueExact();
   }
@@ -247,7 +366,7 @@ public class CouponService {
   }
 
   private static boolean nullableEquals(@Nullable Object left, @Nullable Object right) {
-    return left == null ? right == null : left.equals(right);
+    return !Objects.equals(left, right);
   }
 
   private void ensureCodeAvailable(String code, @Nullable UUID currentCouponId) {

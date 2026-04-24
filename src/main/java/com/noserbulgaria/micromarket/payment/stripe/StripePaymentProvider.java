@@ -7,7 +7,6 @@ import com.stripe.StripeClient;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Charge;
-import com.stripe.model.Coupon;
 import com.stripe.model.Event;
 import com.stripe.model.PromotionCode;
 import com.stripe.model.Refund;
@@ -19,9 +18,9 @@ import com.stripe.param.CouponUpdateParams;
 import com.stripe.param.CustomerCreateParams;
 import com.stripe.param.PromotionCodeCreateParams;
 import com.stripe.param.PromotionCodeUpdateParams;
-import com.stripe.param.common.EmptyParam;
 import com.stripe.param.RefundCreateParams;
 import com.stripe.param.checkout.SessionCreateParams;
+import com.stripe.param.common.EmptyParam;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
@@ -67,18 +66,49 @@ public class StripePaymentProvider {
     }
   }
 
-  public StripeManagedCoupon createManagedCoupon(StripeManagedCouponRequest request) {
-    Coupon coupon = createStripeCoupon(request);
+  public String createCoupon(long amountOff, @Nullable String name) {
+    CouponCreateParams.Builder builder = CouponCreateParams.builder()
+        .setAmountOff(amountOff)
+        .setCurrency(CURRENCY)
+        .setDuration(CouponCreateParams.Duration.ONCE);
+    if (name != null) {
+      builder.setName(name);
+    }
     try {
-      PromotionCode promotionCode = stripeClient.v1().promotionCodes().create(buildPromotionCodeParams(coupon.getId(), request));
-      return toManagedCoupon(coupon.getId(), promotionCode, request.code());
+      return stripeClient.v1().coupons().create(builder.build()).getId();
     } catch (StripeException ex) {
+      throw new IllegalStateException("Failed to create Stripe coupon", ex);
+    }
+  }
+
+  public StripeManagedCoupon createManagedCoupon(StripeManagedCouponRequest request) {
+    String stripeCouponId = createCoupon(request.amountOff(), request.name());
+    try {
+      return createPromotionCode(
+          stripeCouponId, new StripePromotionCodeRequest(
+              request.code(),
+              request.active(),
+              request.expiryDate(),
+              request.maxRedemptions(),
+              request.stripeCustomerId()
+          )
+      );
+    } catch (IllegalStateException ex) {
       try {
-        stripeClient.v1().coupons().delete(coupon.getId());
+        stripeClient.v1().coupons().delete(stripeCouponId);
       } catch (StripeException cleanupEx) {
-        log.warn("Failed to clean up Stripe coupon {} after promotion code creation failure", coupon.getId(), cleanupEx);
+        log.warn("Failed to clean up Stripe coupon {} after promotion code creation failure", stripeCouponId, cleanupEx);
       }
-      throw new IllegalStateException("Failed to create Stripe promotion code for coupon %s".formatted(coupon.getId()), ex);
+      throw new IllegalStateException("Failed to create Stripe promotion code for coupon %s".formatted(stripeCouponId), ex);
+    }
+  }
+
+  public StripeManagedCoupon createPromotionCode(String stripeCouponId, StripePromotionCodeRequest request) {
+    try {
+      PromotionCode promotionCode = stripeClient.v1().promotionCodes().create(buildPromotionCodeParams(stripeCouponId, request));
+      return toManagedCoupon(stripeCouponId, promotionCode, request.code());
+    } catch (StripeException ex) {
+      throw new IllegalStateException("Failed to create Stripe promotion code for coupon %s".formatted(stripeCouponId), ex);
     }
   }
 
@@ -153,6 +183,11 @@ public class StripePaymentProvider {
                               .build())
                       .build())
               .build());
+    }
+    if (order.getAppliedCoupon() != null) {
+      builder.addDiscount(SessionCreateParams.Discount.builder()
+          .setPromotionCode(order.getAppliedCoupon().getStripePromotionCodeId())
+          .build());
     }
 
     RequestOptions options = RequestOptions.builder()
@@ -276,22 +311,7 @@ public class StripePaymentProvider {
     return type.cast(data);
   }
 
-  private Coupon createStripeCoupon(StripeManagedCouponRequest request) {
-    CouponCreateParams.Builder builder = CouponCreateParams.builder()
-        .setAmountOff(request.amountOff())
-        .setCurrency(CURRENCY)
-        .setDuration(CouponCreateParams.Duration.ONCE);
-    if (request.name() != null) {
-      builder.setName(request.name());
-    }
-    try {
-      return stripeClient.v1().coupons().create(builder.build());
-    } catch (StripeException ex) {
-      throw new IllegalStateException("Failed to create Stripe coupon for code %s".formatted(request.code()), ex);
-    }
-  }
-
-  private PromotionCodeCreateParams buildPromotionCodeParams(String stripeCouponId, StripeManagedCouponRequest request) {
+  private PromotionCodeCreateParams buildPromotionCodeParams(String stripeCouponId, StripePromotionCodeRequest request) {
     PromotionCodeCreateParams.Builder builder = PromotionCodeCreateParams.builder()
         .setPromotion(PromotionCodeCreateParams.Promotion.builder()
             .setType(PromotionCodeCreateParams.Promotion.Type.COUPON)

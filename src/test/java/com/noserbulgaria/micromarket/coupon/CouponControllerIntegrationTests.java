@@ -26,13 +26,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -53,13 +52,19 @@ class CouponControllerIntegrationTests {
   private static final String USER_EMAIL = "user@micromarket.dev";
   private static final String PASSWORD = "user12345";
 
-  @Autowired private MockMvc mockMvc;
-  @Autowired private CouponRepository couponRepository;
-  @Autowired private UserRepository userRepository;
-  @Autowired private ProfileRepository profileRepository;
-  @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired
+  private MockMvc mockMvc;
+  @Autowired
+  private CouponRepository couponRepository;
+  @Autowired
+  private UserRepository userRepository;
+  @Autowired
+  private ProfileRepository profileRepository;
+  @Autowired
+  private PasswordEncoder passwordEncoder;
 
-  @MockitoBean private StripePaymentProvider stripePaymentProvider;
+  @MockitoBean
+  private StripePaymentProvider stripePaymentProvider;
 
   private final AtomicInteger stripeCounter = new AtomicInteger();
 
@@ -317,6 +322,21 @@ class CouponControllerIntegrationTests {
         .andExpect(status().isForbidden());
   }
 
+  @Test
+  @WithUserDetails(value = USER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void getOwnCoupons_returnsOnlyCurrentUsersCoupons() throws Exception {
+    User user = userRepository.findByEmail(USER_EMAIL).orElseThrow();
+    User otherUser = createUser("other-user@micromarket.dev", true, "cus_other");
+    couponRepository.saveAndFlush(coupon("MINE", user, "coupon_mine", "promo_mine"));
+    couponRepository.saveAndFlush(coupon("NOT-MINE", otherUser, "coupon_other", "promo_other"));
+
+    mockMvc.perform(get("/coupon/own"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].code").value("MINE"))
+        .andExpect(jsonPath("$.content[0].userId").value(user.getId().toString()));
+  }
+
   private Coupon coupon(String code, User user, String stripeCouponId, String stripePromotionCodeId) {
     return Coupon.builder()
         .user(user)
@@ -337,7 +357,7 @@ class CouponControllerIntegrationTests {
         .orElseGet(() -> {
           User created = new User();
           created.setEmail(email);
-          created.setPassword(passwordEncoder.encode(PASSWORD));
+          created.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
           created.setRole(Role.USER);
           created.setStatus(AccountStatus.ACTIVE);
           return userRepository.saveAndFlush(created);
@@ -363,7 +383,7 @@ class CouponControllerIntegrationTests {
     }
     User user = new User();
     user.setEmail(email);
-    user.setPassword(passwordEncoder.encode(PASSWORD));
+    user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
     user.setRole(role);
     user.setStatus(AccountStatus.ACTIVE);
     userRepository.saveAndFlush(user);

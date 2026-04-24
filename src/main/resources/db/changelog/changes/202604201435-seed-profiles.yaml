@@ -9,7 +9,7 @@ databaseChangeLog:
             columns:
               - column:
                   name: points
-                  valueNumeric: "0"
+                  valueNumeric: "9999999999"
             where: user_id = 'a0000000-0000-0000-0000-000000000001'
         - update:
             tableName: profile
