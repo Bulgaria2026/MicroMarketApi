@@ -35,6 +35,8 @@ ext {
     uberNullawayVersion = "0.13.3"
     stripeVersion = "32.0.0"
     emailTemplatesVersion = "0.1.0-SNAPSHOT"
+    resendVersion = "v4.14.1"
+    springRetryVersion = "2.0.12"
 }
 
 dependencies {
@@ -58,8 +60,11 @@ dependencies {
     // Payments
     implementation "com.stripe:stripe-java:${stripeVersion}"
 
-    // Email templates
+    // Email templates + rendering + transport
     implementation "com.noserbulgaria.micromarket:email-templates:${emailTemplatesVersion}"
+    implementation "org.springframework.boot:spring-boot-starter-thymeleaf"
+    implementation "org.springframework.retry:spring-retry:${springRetryVersion}"
+    implementation "com.resend:resend-java:${resendVersion}"
 
     // Mapping & Code Generation
     implementation "org.mapstruct:mapstruct:${mapstructVersion}"

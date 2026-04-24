@@ -26,6 +26,11 @@ public class OrderService {
         .orElseThrow(() -> new NotFoundApiException("Order with id '%s' not found".formatted(id)));
   }
 
+  public Order findEntityByIdOrThrow(UUID id) {
+    return orderRepository.findById(id)
+        .orElseThrow(() -> new NotFoundApiException("Order with id '%s' not found".formatted(id)));
+  }
+
   public Page<OrderResponse> findAll(Specification<Order> spec, Pageable pageable) {
     return orderRepository.findAll(spec, pageable)
         .map(orderMapper::toDto);

@@ -46,6 +46,10 @@ jwt.private.key=file:./secrets/jwt/app.key
 
 Checkout requires a Stripe test-mode key and a running webhook listener. See [docs/stripe-dev.md](docs/stripe-dev.md) for the full setup.
 
+### Resend (emails)
+
+Emails are sent via Resend. Off by default in dev; flip on by setting `MAIL_ENABLED=true` and pasting a `re_…` key into `.env`. See [docs/mail-dev.md](docs/mail-dev.md) for the full setup.
+
 ### GitHub Packages (email templates)
 
 The build pulls `com.noserbulgaria.micromarket:email-templates` from GitHub Packages, which requires auth even for public artifacts. Create a classic PAT with only the `read:packages` scope and add it to `~/.gradle/gradle.properties`:
