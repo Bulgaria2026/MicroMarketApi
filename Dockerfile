@@ -2,7 +2,12 @@
 FROM docker.io/gradle:9-jdk25 AS build
 WORKDIR /app
 COPY . .
-RUN chmod +x gradlew && ./gradlew clean bootJar --no-daemon
+RUN --mount=type=secret,id=github_username \
+    --mount=type=secret,id=github_token \
+    chmod +x gradlew && \
+    GITHUB_USERNAME="$(cat /run/secrets/github_username)" \
+    GITHUB_TOKEN="$(cat /run/secrets/github_token)" \
+    ./gradlew clean bootJar --no-daemon
 
 # Runtime stage
 FROM docker.io/eclipse-temurin:25-jre-jammy
