@@ -85,13 +85,13 @@ public class OrderPlacementTransactions {
 
   private String resolveEmail(@Nullable CustomUserDetails userDetails, PlaceOrderRequest request) {
     if (userDetails != null) {
-      return userDetails.user().getEmail();
+      return userDetails.getEmail();
     }
     String requestEmail = request.email();
     if (requestEmail == null || requestEmail.isBlank()) {
       throw new BadRequestApiException("Email is required for guest checkout");
     }
-    return requestEmail.trim();
+    return requestEmail.trim().toLowerCase(Locale.ROOT);
   }
 
   private List<ResolvedItem> resolveItems(List<PlaceOrderItem> requested) {

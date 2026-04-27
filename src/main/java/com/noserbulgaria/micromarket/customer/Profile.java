@@ -1,32 +1,36 @@
 package com.noserbulgaria.micromarket.customer;
 
 import com.noserbulgaria.micromarket.auth.user.User;
+import com.noserbulgaria.micromarket.common.ExtendedEntity;
 import jakarta.persistence.Column;
-import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.MapsId;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Min;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
 import lombok.ToString;
 
+/** Registered-account state for a Customer. Shares the Customer's primary key (1:1 via {@code @MapsId}). */
 @Data
-@NoArgsConstructor
 @Entity
 @Table(name = "profile")
-@DiscriminatorValue("PROFILE")
 @EqualsAndHashCode(callSuper = true)
 @SuppressWarnings("NullAway.Init")
-public class Profile extends Customer {
+public class Profile extends ExtendedEntity {
 
-  @EqualsAndHashCode.Exclude
+  @MapsId
   @ToString.Exclude
   @OneToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "user_id", nullable = false, unique = true)
+  @JoinColumn(name = "id")
+  private Customer customer;
+
+  @ToString.Exclude
+  @OneToOne(fetch = FetchType.LAZY, optional = false)
+  @JoinColumn(name = "user_id", unique = true, nullable = false)
   private User user;
 
   @Min(0)

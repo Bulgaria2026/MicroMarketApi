@@ -5,6 +5,8 @@ import com.noserbulgaria.micromarket.auth.user.Role;
 import com.noserbulgaria.micromarket.auth.user.User;
 import com.noserbulgaria.micromarket.auth.user.UserRepository;
 import com.noserbulgaria.micromarket.order.OrderRepository;
+
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +34,7 @@ class CustomerControllerTest {
   private static final String ADMIN_EMAIL = "admin@micromarket.dev";
   private static final String USER_EMAIL = "user@micromarket.dev";
   private static final String INACTIVE_ADMIN_EMAIL = "customer-inactive-admin@micromarket.dev";
+  private static final String GUEST_EMAIL = "customer-guest@micromarket.dev";
   private static final String PASSWORD = "user12345";
 
   @Autowired
@@ -41,10 +44,7 @@ class CustomerControllerTest {
   private UserRepository userRepository;
 
   @Autowired
-  private ProfileRepository profileRepository;
-
-  @Autowired
-  private GuestRepository guestRepository;
+  private CustomerRepository customerRepository;
 
   @Autowired
   private PasswordEncoder passwordEncoder;
@@ -53,29 +53,30 @@ class CustomerControllerTest {
   private OrderRepository orderRepository;
 
   private User activeUser;
-  private Profile activeProfile;
-  private Profile inactiveAdminProfile;
-  private Guest guestCustomer;
+  private Customer activeCustomer;
+  private Customer inactiveAdminCustomer;
+  private Customer guestCustomer;
 
   @BeforeEach
   void setUp() {
     orderRepository.deleteAll();
     orderRepository.flush();
-    guestRepository.deleteAll();
-    guestRepository.flush();
-    profileRepository.deleteAll();
-    profileRepository.flush();
 
-    User adminUser = userRepository.findByEmail(ADMIN_EMAIL).orElseThrow();
-    createProfile(adminUser, 50L);
+    User adminUser = Objects.requireNonNull(
+        customerRepository.findByEmail(ADMIN_EMAIL).orElseThrow().getProfile()).getUser();
+    activeUser = Objects.requireNonNull(
+        customerRepository.findByEmail(USER_EMAIL).orElseThrow().getProfile()).getUser();
 
-    activeUser = userRepository.findByEmail(USER_EMAIL).orElseThrow();
-    activeProfile = createProfile(activeUser, 15L);
+    customerRepository.deleteAll();
+    customerRepository.flush();
 
-    User inactiveAdminUser = createUser(INACTIVE_ADMIN_EMAIL, Role.ADMINISTRATOR, AccountStatus.INACTIVE);
-    inactiveAdminProfile = createProfile(inactiveAdminUser, 120L);
+    upsertRegisteredCustomer(ADMIN_EMAIL, adminUser, 50L);
+    activeCustomer = upsertRegisteredCustomer(USER_EMAIL, activeUser, 15L);
 
-    guestCustomer = createGuest("customer-guest@micromarket.dev");
+    User inactiveAdminUser = createUser(Role.ADMINISTRATOR, AccountStatus.INACTIVE);
+    inactiveAdminCustomer = upsertRegisteredCustomer(INACTIVE_ADMIN_EMAIL, inactiveAdminUser, 120L);
+
+    guestCustomer = upsertGuest(GUEST_EMAIL);
   }
 
   @Test
@@ -116,14 +117,15 @@ class CustomerControllerTest {
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getAll_returnsProfileRowsWithFilledFields() throws Exception {
     mockMvc.perform(get("/customer")
-            .param("email", activeUser.getEmail()))
+            .param("email", USER_EMAIL))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
         .andExpect(jsonPath("$.content[0].type").value(CustomerType.PROFILE.name()))
-        .andExpect(jsonPath("$.content[0].email").value(activeUser.getEmail()))
+        .andExpect(jsonPath("$.content[0].email").value(USER_EMAIL))
         .andExpect(jsonPath("$.content[0].role").value(activeUser.getRole().name()))
         .andExpect(jsonPath("$.content[0].status").value(activeUser.getStatus().name()))
-        .andExpect(jsonPath("$.content[0].points").value(activeProfile.getPoints()));
+        .andExpect(jsonPath("$.content[0].points").value(
+            Objects.requireNonNull(activeCustomer.getProfile()).getPoints()));
   }
 
   @Test
@@ -173,7 +175,7 @@ class CustomerControllerTest {
             .param("status", AccountStatus.INACTIVE.name()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
-        .andExpect(jsonPath("$.content[0].id").value(inactiveAdminProfile.getId().toString()))
+        .andExpect(jsonPath("$.content[0].id").value(inactiveAdminCustomer.getId().toString()))
         .andExpect(jsonPath("$.content[0].type").value(CustomerType.PROFILE.name()));
   }
 
@@ -185,7 +187,7 @@ class CustomerControllerTest {
             .param("maxPoints", "200"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
-        .andExpect(jsonPath("$.content[0].id").value(inactiveAdminProfile.getId().toString()))
+        .andExpect(jsonPath("$.content[0].id").value(inactiveAdminCustomer.getId().toString()))
         .andExpect(jsonPath("$.content[0].points").value(120));
   }
 
@@ -200,7 +202,7 @@ class CustomerControllerTest {
             .param("maxPoints", "200"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
-        .andExpect(jsonPath("$.content[0].id").value(inactiveAdminProfile.getId().toString()));
+        .andExpect(jsonPath("$.content[0].id").value(inactiveAdminCustomer.getId().toString()));
   }
 
   @Test
@@ -223,25 +225,28 @@ class CustomerControllerTest {
         .andExpect(jsonPath("$.detail").value("Resource 'user' was not found."));
   }
 
-  private User createUser(String email, Role role, AccountStatus status) {
+  private User createUser(Role role, AccountStatus status) {
     User user = new User();
-    user.setEmail(email);
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
     user.setRole(role);
     user.setStatus(status);
     return userRepository.saveAndFlush(user);
   }
 
-  private Profile createProfile(User user, long points) {
+  private Customer upsertRegisteredCustomer(String email, User user, long points) {
+    Customer customer = new Customer();
+    customer.setEmail(email);
     Profile profile = new Profile();
+    profile.setCustomer(customer);
     profile.setUser(user);
     profile.setPoints(points);
-    return profileRepository.saveAndFlush(profile);
+    customer.setProfile(profile);
+    return customerRepository.saveAndFlush(customer);
   }
 
-  private Guest createGuest(String email) {
-    Guest guest = new Guest();
-    guest.setEmail(email);
-    return guestRepository.saveAndFlush(guest);
+  private Customer upsertGuest(String email) {
+    Customer customer = new Customer();
+    customer.setEmail(email);
+    return customerRepository.saveAndFlush(customer);
   }
 }

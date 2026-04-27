@@ -39,7 +39,7 @@ public class OrderService {
   public Page<OrderResponse> findOwnOrders(UUID userId, OwnOrderFilter filter, Pageable pageable) {
     return profileRepository.findByUserId(userId)
         .map(profile -> orderRepository
-            .findAll(OrderSpecification.forCustomer(profile.getId(), filter), pageable)
+            .findAll(OrderSpecification.forCustomer(profile.getCustomer().getId(), filter), pageable)
             .map(orderMapper::toDto))
         .orElseGet(Page::empty);
   }

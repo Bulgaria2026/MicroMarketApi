@@ -15,6 +15,7 @@ import org.mapstruct.ReportingPolicy;
 )
 public interface ProfileMapper {
 
+  @Mapping(target = "user", source = ".")
   ProfileResponse toDto(Profile profile);
 
   @BeanMapping(ignoreByDefault = true)

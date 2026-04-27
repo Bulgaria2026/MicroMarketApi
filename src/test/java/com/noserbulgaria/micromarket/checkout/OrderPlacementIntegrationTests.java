@@ -3,10 +3,7 @@ package com.noserbulgaria.micromarket.checkout;
 import com.jayway.jsonpath.JsonPath;
 import com.noserbulgaria.micromarket.customer.Customer;
 import com.noserbulgaria.micromarket.customer.CustomerRepository;
-import com.noserbulgaria.micromarket.customer.Guest;
-import com.noserbulgaria.micromarket.customer.GuestRepository;
 import com.noserbulgaria.micromarket.customer.Profile;
-import com.noserbulgaria.micromarket.customer.ProfileRepository;
 import com.noserbulgaria.micromarket.order.Order;
 import com.noserbulgaria.micromarket.order.OrderItem;
 import com.noserbulgaria.micromarket.order.OrderRepository;
@@ -68,8 +65,6 @@ class OrderPlacementIntegrationTests {
   @Autowired private UserRepository userRepository;
   @Autowired private ProductRepository productRepository;
   @Autowired private OrderRepository orderRepository;
-  @Autowired private GuestRepository guestRepository;
-  @Autowired private ProfileRepository profileRepository;
   @Autowired private CustomerRepository customerRepository;
   @Autowired private StripeEventRepository stripeEventRepository;
   @Autowired private PasswordEncoder passwordEncoder;
@@ -84,15 +79,13 @@ class OrderPlacementIntegrationTests {
   void setUp() {
     stripeEventRepository.deleteAll();
     orderRepository.deleteAll();
-    profileRepository.deleteAll();
-    guestRepository.deleteAll();
     customerRepository.deleteAll();
     productRepository.deleteAll();
     userRepository.deleteAll();
 
     AtomicInteger customerCounter = new AtomicInteger();
     when(stripePaymentProvider.createCustomer(any()))
-        .thenAnswer(inv -> "cus_fake_" + customerCounter.incrementAndGet());
+        .thenAnswer(_ -> "cus_fake_" + customerCounter.incrementAndGet());
     when(stripePaymentProvider.createCheckoutSession(any(), any()))
         .thenAnswer(inv -> {
           Order order = inv.getArgument(0);
@@ -101,10 +94,18 @@ class OrderPlacementIntegrationTests {
         });
 
     User user = new User();
-    user.setEmail(USER_EMAIL);
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
     user.setRole(Role.USER);
-    userRepository.saveAndFlush(user);
+    user = userRepository.saveAndFlush(user);
+
+    Customer customer = new Customer();
+    customer.setEmail(USER_EMAIL);
+    Profile profile = new Profile();
+    profile.setCustomer(customer);
+    profile.setUser(user);
+    profile.setPoints(0);
+    customer.setProfile(profile);
+    customerRepository.saveAndFlush(customer);
 
     sparklingWater = product("Sparkling Water", new BigDecimal("29.99"), 0, true, 100);
     coffeeBeans = product("Coffee Beans", new BigDecimal("99.50"), 10, true, 5);
@@ -114,8 +115,6 @@ class OrderPlacementIntegrationTests {
   void tearDown() {
     stripeEventRepository.deleteAll();
     orderRepository.deleteAll();
-    profileRepository.deleteAll();
-    guestRepository.deleteAll();
     customerRepository.deleteAll();
     productRepository.deleteAll();
     userRepository.deleteAll();
@@ -149,7 +148,8 @@ class OrderPlacementIntegrationTests {
       return order.getCustomer().getId();
     });
 
-    Guest guest = guestRepository.findByEmailIgnoreCase("guest@example.com").orElseThrow();
+    Customer guest = customerRepository.findByEmail("guest@example.com").orElseThrow();
+    assertThat(guest.isRegistered()).isFalse();
     assertThat(customerId).isEqualTo(guest.getId());
   }
 
@@ -163,7 +163,8 @@ class OrderPlacementIntegrationTests {
             .contentType(MediaType.APPLICATION_JSON)
             .content(body(sparklingWater.getId(), 1, "REPEAT@EXAMPLE.COM")))
         .andExpect(status().isCreated());
-    assertThat(guestRepository.findAll()).hasSize(1);
+    assertThat(customerRepository.findByEmail("repeat@example.com")).isPresent();
+    assertThat(customerRepository.findAll().stream().filter(c -> !c.isRegistered()).toList()).hasSize(1);
   }
 
   @Test
@@ -171,15 +172,14 @@ class OrderPlacementIntegrationTests {
     placeOrderAsGuest(sparklingWater.getId(), 1, "stripe-reuse@example.com");
     placeOrderAsGuest(sparklingWater.getId(), 1, "stripe-reuse@example.com");
 
-    Guest guest = guestRepository.findByEmailIgnoreCase("stripe-reuse@example.com").orElseThrow();
-    Customer reloaded = customerRepository.findById(guest.getId()).orElseThrow();
-    assertThat(reloaded.getStripeCustomerId()).isNotNull();
+    Customer guest = customerRepository.findByEmail("stripe-reuse@example.com").orElseThrow();
+    assertThat(guest.getStripeCustomerId()).isNotNull();
 
     verify(stripePaymentProvider, times(1)).createCustomer("stripe-reuse@example.com");
     ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
     verify(stripePaymentProvider, times(2)).createCheckoutSession(any(), captor.capture());
     assertThat(captor.getAllValues())
-        .containsExactly(reloaded.getStripeCustomerId(), reloaded.getStripeCustomerId());
+        .containsExactly(guest.getStripeCustomerId(), guest.getStripeCustomerId());
   }
 
   @Test
@@ -192,9 +192,9 @@ class OrderPlacementIntegrationTests {
   }
 
   @Test
-  void authenticatedCheckout_createsProfileLazily() throws Exception {
+  void authenticatedCheckout_reusesExistingCustomer() throws Exception {
     String token = accessTokenFor(USER_EMAIL, PASSWORD);
-    assertThat(profileRepository.findAll()).isEmpty();
+    long customersBefore = customerRepository.count();
 
     mockMvc.perform(post("/order")
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -202,7 +202,7 @@ class OrderPlacementIntegrationTests {
             .content(body(sparklingWater.getId(), 1, null)))
         .andExpect(status().isCreated());
 
-    assertThat(profileRepository.findAll()).hasSize(1);
+    assertThat(customerRepository.count()).isEqualTo(customersBefore);
 
     mockMvc.perform(post("/order")
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -210,7 +210,7 @@ class OrderPlacementIntegrationTests {
             .content(body(sparklingWater.getId(), 1, null)))
         .andExpect(status().isCreated());
 
-    assertThat(profileRepository.findAll()).hasSize(1);
+    assertThat(customerRepository.count()).isEqualTo(customersBefore);
   }
 
   @Test
@@ -228,6 +228,7 @@ class OrderPlacementIntegrationTests {
 
   @Test
   void checkout_insufficientStock_returnsBadRequestAndDoesNotPersistOrder() throws Exception {
+    long customersBefore = customerRepository.count();
     mockMvc.perform(post("/order")
             .contentType(MediaType.APPLICATION_JSON)
             .content(body(coffeeBeans.getId(), 999, "bulk@example.com")))
@@ -235,7 +236,7 @@ class OrderPlacementIntegrationTests {
         .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("Insufficient stock")));
 
     assertThat(orderRepository.findAll()).isEmpty();
-    assertThat(guestRepository.findAll()).isEmpty();
+    assertThat(customerRepository.count()).isEqualTo(customersBefore);
   }
 
   @Test
@@ -590,13 +591,13 @@ class OrderPlacementIntegrationTests {
             .content(body(sparklingWater.getId(), 1, null)))
         .andExpect(status().isCreated());
 
-    Profile profile = profileRepository.findAll().getFirst();
-    assertThat(profile.getStripeCustomerId()).isNotNull();
+    Customer customer = customerRepository.findByEmail(USER_EMAIL).orElseThrow();
+    assertThat(customer.getStripeCustomerId()).isNotNull();
 
     ArgumentCaptor<String> customerCaptor = ArgumentCaptor.forClass(String.class);
     verify(stripePaymentProvider, times(2)).createCheckoutSession(any(), customerCaptor.capture());
     assertThat(customerCaptor.getAllValues())
-        .containsExactly(profile.getStripeCustomerId(), profile.getStripeCustomerId());
+        .containsExactly(customer.getStripeCustomerId(), customer.getStripeCustomerId());
   }
 
   @Test

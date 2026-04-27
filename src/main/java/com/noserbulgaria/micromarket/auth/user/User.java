@@ -15,8 +15,6 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 @SuppressWarnings("NullAway.Init")
 public class User extends ExtendedEntity {
-  @Column(nullable = false, unique = true)
-  private String email;
 
   @Column(nullable = false)
   private String password;

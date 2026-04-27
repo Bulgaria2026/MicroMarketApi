@@ -17,20 +17,24 @@ public class ProfileService {
 
   @Transactional(readOnly = true)
   public ProfileResponse getByIdOrThrow(UUID id) {
-    return profileMapper.toDto(profileRepository.findById(id)
-        .orElseThrow((() -> new NotFoundApiException("Profile with id '%s' not found".formatted(id)))));
+    return profileMapper.toDto(profileByIdOrThrow(id));
   }
 
   @Transactional(readOnly = true)
   public ProfileResponse getByUserIdOrThrow(UUID userId) {
-    return profileMapper.toDto(profileRepository.findByUserId(userId)
-        .orElseThrow(() -> new NotFoundApiException("Profile with userId '%s' not found".formatted(userId))));
+    return profileRepository.findByUserId(userId)
+        .map(profileMapper::toDto)
+        .orElseThrow(() -> new NotFoundApiException("Profile with userId '%s' not found".formatted(userId)));
   }
 
   public ProfileResponse updateByIdOrThrow(UUID id, ProfileRequest request) {
-    Profile profile = profileRepository.findById(id)
-        .orElseThrow(() -> new NotFoundApiException("Profile with id '%s' not found".formatted(id)));
+    Profile profile = profileByIdOrThrow(id);
     profileMapper.update(request, profile);
     return profileMapper.toDto(profileRepository.save(profile));
+  }
+
+  private Profile profileByIdOrThrow(UUID id) {
+    return profileRepository.findById(id)
+        .orElseThrow(() -> new NotFoundApiException("Profile with id '%s' not found".formatted(id)));
   }
 }

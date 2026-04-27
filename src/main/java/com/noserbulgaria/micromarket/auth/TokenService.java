@@ -38,20 +38,15 @@ public class TokenService {
   @Value("${jwt.refresh-token.expiration}")
   private Duration refreshTokenExpiration;
 
-  /**
-   * Creates a short-lived access token containing the user's identity and roles.
-   *
-   * @param user an authenticated user
-   * @return an encoded JWT access token
-   */
-  public String generateAccessToken(User user) {
+  /** Creates a short-lived access token. */
+  public String generateAccessToken(User user, String email) {
     Instant now = Instant.now();
     JwtClaimsSet claims = JwtClaimsSet.builder()
         .issuer(ISSUER)
         .issuedAt(now)
         .expiresAt(now.plus(accessTokenExpiration))
         .subject(user.getId().toString())
-        .claim("email", user.getEmail())
+        .claim("email", email)
         .claim("roles", List.of(user.getRole().name()))
         .claim(TOKEN_TYPE_CLAIM, ACCESS_TOKEN_TYPE)
         .build();

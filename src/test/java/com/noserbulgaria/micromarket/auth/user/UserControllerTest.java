@@ -1,5 +1,7 @@
 package com.noserbulgaria.micromarket.auth.user;
 
+import com.noserbulgaria.micromarket.customer.Customer;
+import com.noserbulgaria.micromarket.customer.CustomerRepository;
 import com.noserbulgaria.micromarket.customer.Profile;
 import com.noserbulgaria.micromarket.customer.ProfileRepository;
 import org.junit.jupiter.api.Assertions;
@@ -42,6 +44,9 @@ class UserControllerTest {
   private UserRepository userRepository;
 
   @Autowired
+  private CustomerRepository customerRepository;
+
+  @Autowired
   private ProfileRepository profileRepository;
 
   @Autowired
@@ -64,7 +69,7 @@ class UserControllerTest {
                 """))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.role").value("ADMINISTRATOR"))
-        .andExpect(jsonPath("$.email").value(userToUpdate.getEmail()))
+        .andExpect(jsonPath("$.email").value(emailFor(userToUpdate)))
         .andExpect(jsonPath("$.status").value(AccountStatus.ACTIVE.name()));
 
     User updatedUser = userRepository.findById(userToUpdate.getId()).orElseThrow();
@@ -86,8 +91,8 @@ class UserControllerTest {
         .andExpect(jsonPath("$.role").value(userToUpdate.getRole().name()))
         .andExpect(jsonPath("$.status").value(AccountStatus.ACTIVE.name()));
 
-    User updatedUser = userRepository.findById(userToUpdate.getId()).orElseThrow();
-    Assertions.assertEquals(newEmail, updatedUser.getEmail());
+    Profile updatedProfile = profileRepository.findByUserId(userToUpdate.getId()).orElseThrow();
+    Assertions.assertEquals(newEmail, updatedProfile.getCustomer().getEmail());
   }
 
   @Test
@@ -100,7 +105,7 @@ class UserControllerTest {
                 """))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value(AccountStatus.INACTIVE.name()))
-        .andExpect(jsonPath("$.email").value(userToUpdate.getEmail()))
+        .andExpect(jsonPath("$.email").value(emailFor(userToUpdate)))
         .andExpect(jsonPath("$.role").value(userToUpdate.getRole().name()));
 
     User updatedUser = userRepository.findById(userToUpdate.getId()).orElseThrow();
@@ -110,16 +115,16 @@ class UserControllerTest {
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void patchUser_withDuplicateEmail_returnsConflict() throws Exception {
-    User existingUser = createUserWithProfile(EXISTING_EMAIL, Role.USER);
+    createUserWithProfile(EXISTING_EMAIL, Role.USER);
 
     mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"email": "%s"}
-                """.formatted(existingUser.getEmail())))
+                """.formatted(EXISTING_EMAIL)))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.title").value("Conflict"))
-        .andExpect(jsonPath("$.detail").value("User with email '%s' already exists".formatted(existingUser.getEmail())));
+        .andExpect(jsonPath("$.detail").value("User with email '%s' already exists".formatted(EXISTING_EMAIL)));
   }
 
   @Test
@@ -193,16 +198,23 @@ class UserControllerTest {
 
   private User createUserWithProfile(String email, Role role) {
     User user = new User();
-    user.setEmail(email);
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
     user.setRole(role);
     user.setStatus(AccountStatus.ACTIVE);
     user = userRepository.saveAndFlush(user);
 
+    Customer customer = new Customer();
+    customer.setEmail(email);
     Profile profile = new Profile();
+    profile.setCustomer(customer);
     profile.setUser(user);
     profile.setPoints(0);
-    profileRepository.saveAndFlush(profile);
+    customer.setProfile(profile);
+    customerRepository.saveAndFlush(customer);
     return user;
+  }
+
+  private String emailFor(User user) {
+    return profileRepository.findByUserId(user.getId()).orElseThrow().getCustomer().getEmail();
   }
 }
