@@ -9,6 +9,8 @@ public record OrderFilter(
     @Nullable Instant fromDate,
     @Nullable Instant toDate,
     @Nullable UUID customerId,
+    @Nullable String orderNumber,
+    @Nullable String email,
     @Nullable OrderStatusType status
 ) {
 }

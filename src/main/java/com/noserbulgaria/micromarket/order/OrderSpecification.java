@@ -7,6 +7,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 import java.util.UUID;
 
+import static com.noserbulgaria.micromarket.common.SpecificationBuilder.containsIgnoreCase;
 import static com.noserbulgaria.micromarket.common.SpecificationBuilder.equalTo;
 import static com.noserbulgaria.micromarket.common.SpecificationBuilder.greaterThanOrEqualTo;
 import static com.noserbulgaria.micromarket.common.SpecificationBuilder.lessThanOrEqualTo;
@@ -19,6 +20,8 @@ public class OrderSpecification {
         greaterThanOrEqualTo(ExtendedEntity_.createdAt, filter.fromDate()),
         lessThanOrEqualTo(ExtendedEntity_.createdAt, filter.toDate()),
         customerIdEquals(filter.customerId()),
+        containsIgnoreCase(Order_.orderNumber, filter.orderNumber()),
+        containsIgnoreCase(Order_.email, filter.email()),
         equalTo(Order_.status, filter.status())
     );
   }

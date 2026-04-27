@@ -138,6 +138,42 @@ class OrderControllerTest {
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void getOrdersAsAdministrator_withOrderNumberFilter_returnsFiltered() throws Exception {
+    Order other = Order.builder()
+        .orderNumber("MM-X99999")
+        .status(OrderStatusType.PAID)
+        .customer(testProfile)
+        .email("other@test.local")
+        .subtotal(new BigDecimal("5.00"))
+        .build();
+    orderRepository.saveAndFlush(other);
+
+    mockMvc.perform(get("/order").param("orderNumber", "t00001"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].orderNumber").value("MM-T00001"));
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void getOrdersAsAdministrator_withEmailFilter_returnsFiltered() throws Exception {
+    Order other = Order.builder()
+        .orderNumber("MM-X99999")
+        .status(OrderStatusType.PAID)
+        .customer(testProfile)
+        .email("someone@elsewhere.com")
+        .subtotal(new BigDecimal("5.00"))
+        .build();
+    orderRepository.saveAndFlush(other);
+
+    mockMvc.perform(get("/order").param("email", "TEST.LOCAL"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].email").value("admin@test.local"));
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getOrderByIdAsAdministrator_returnsOk() throws Exception {
     mockMvc.perform(get("/order/{id}", testOrder.getId()))
         .andExpect(status().isOk())
