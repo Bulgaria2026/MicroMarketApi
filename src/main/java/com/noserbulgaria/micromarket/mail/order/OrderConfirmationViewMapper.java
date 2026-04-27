@@ -2,13 +2,14 @@ package com.noserbulgaria.micromarket.mail.order;
 
 import com.noserbulgaria.micromarket.order.Order;
 import com.noserbulgaria.micromarket.order.OrderItem;
+import org.springframework.stereotype.Component;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
-import org.springframework.stereotype.Component;
 
 @Component
 class OrderConfirmationViewMapper {
@@ -24,7 +25,6 @@ class OrderConfirmationViewMapper {
     BigDecimal subtotal = items.stream()
         .map(item -> item.price().multiply(BigDecimal.valueOf(item.amount())))
         .reduce(BigDecimal.ZERO, BigDecimal::add);
-
     BigDecimal totalDiscount = subtotal.subtract(order.getTotalAmount()).max(BigDecimal.ZERO);
 
     String date = DATE.format(order.getCreatedAt().atZone(ZoneId.systemDefault()));
@@ -48,11 +48,14 @@ class OrderConfirmationViewMapper {
             .divide(original, 0, RoundingMode.HALF_UP)
             .intValueExact();
 
+    BigDecimal lineTotal = charged.multiply(BigDecimal.valueOf(item.getQuantity()));
+
     return new OrderConfirmationView.Item(
         item.getProductName(),
         item.getProduct().getDescription(),
         item.getQuantity(),
         original,
-        Math.max(discountPct, 0));
+        Math.max(discountPct, 0),
+        lineTotal);
   }
 }

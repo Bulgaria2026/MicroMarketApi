@@ -34,7 +34,7 @@ ext {
     googleErrorProneCoreVersion = "2.49.0"
     uberNullawayVersion = "0.13.3"
     stripeVersion = "32.0.0"
-    emailTemplatesVersion = "0.1.0-SNAPSHOT"
+    emailTemplatesVersion = "0.2.0-SNAPSHOT"
     resendVersion = "v4.14.1"
     springRetryVersion = "2.0.12"
 }

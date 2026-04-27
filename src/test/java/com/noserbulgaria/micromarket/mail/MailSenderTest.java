@@ -42,7 +42,7 @@ class MailSenderTest {
         "ORD-100042",
         "23 April 2026",
         List.of(new OrderConfirmationView.Item(
-            "Olive Oil 500ml", "Extra virgin", 2, new BigDecimal("14.90"), 10)),
+            "Olive Oil 500ml", "Extra virgin", 2, new BigDecimal("14.90"), 10, new BigDecimal("26.82"))),
         new BigDecimal("29.80"),
         new BigDecimal("2.98"),
         new BigDecimal("26.82"));

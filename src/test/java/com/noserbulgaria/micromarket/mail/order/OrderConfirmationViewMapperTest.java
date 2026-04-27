@@ -40,6 +40,7 @@ class OrderConfirmationViewMapperTest {
     assertThat(item.amount()).isEqualTo(2);
     assertThat(item.price()).isEqualByComparingTo("14.90");
     assertThat(item.discount()).isZero();
+    assertThat(item.lineTotal()).isEqualByComparingTo("29.80");
     assertThat(view.subtotal()).isEqualByComparingTo("29.80");
     assertThat(view.totalDiscount()).isEqualByComparingTo("0.00");
     assertThat(view.total()).isEqualByComparingTo("29.80");
@@ -61,6 +62,7 @@ class OrderConfirmationViewMapperTest {
 
     OrderConfirmationView.Item item = view.items().getFirst();
     assertThat(item.discount()).isEqualTo(10);
+    assertThat(item.lineTotal()).isEqualByComparingTo("180.00");
     assertThat(view.subtotal()).isEqualByComparingTo("200.00");
     assertThat(view.totalDiscount()).isEqualByComparingTo("20.00");
     assertThat(view.total()).isEqualByComparingTo("180.00");
@@ -83,9 +85,29 @@ class OrderConfirmationViewMapperTest {
     OrderConfirmationView view = mapper.toView(order);
 
     assertThat(view.items()).extracting(OrderConfirmationView.Item::discount).containsExactly(0, 25);
+    assertThat(view.items()).extracting(OrderConfirmationView.Item::lineTotal)
+        .usingElementComparator(BigDecimal::compareTo)
+        .containsExactly(new BigDecimal("30.00"), new BigDecimal("15.00"));
     assertThat(view.subtotal()).isEqualByComparingTo("50.00");
     assertThat(view.totalDiscount()).isEqualByComparingTo("5.00");
     assertThat(view.total()).isEqualByComparingTo("45.00");
+  }
+
+  @Test
+  void lineTotalReusesChargedPriceInsteadOfReconstructingFromRoundedPercent() {
+    OrderItem line = OrderItem.builder()
+        .product(product("Sourdough", "24h fermented")).productName("Sourdough").quantity(1)
+        .originalUnitPrice(new BigDecimal("9.90"))
+        .priceAtPurchase(new BigDecimal("8.90"))
+        .build();
+    Order order = order("ORD-100004", new BigDecimal("8.90"), Set.of(line));
+
+    OrderConfirmationView view = mapper.toView(order);
+
+    OrderConfirmationView.Item item = view.items().getFirst();
+    assertThat(item.discount()).isEqualTo(10);
+    assertThat(item.lineTotal()).isEqualByComparingTo("8.90");
+    assertThat(view.total()).isEqualByComparingTo("8.90");
   }
 
   private static Product product(String name, String description) {

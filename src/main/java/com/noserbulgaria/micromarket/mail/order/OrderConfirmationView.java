@@ -19,5 +19,6 @@ public record OrderConfirmationView(
       String description,
       int amount,
       BigDecimal price,
-      int discount) {}
+      int discount,
+      BigDecimal lineTotal) {}
 }
