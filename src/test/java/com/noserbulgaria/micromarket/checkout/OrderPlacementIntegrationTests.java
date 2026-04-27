@@ -20,6 +20,8 @@ import com.noserbulgaria.micromarket.order.OrderItem;
 import com.noserbulgaria.micromarket.order.OrderRepository;
 import com.noserbulgaria.micromarket.order.OrderStatusType;
 import com.noserbulgaria.micromarket.payment.stripe.StripeCheckoutSession;
+import com.noserbulgaria.micromarket.payment.stripe.StripeCompletedCheckoutSession;
+import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCoupon;
 import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
 import com.noserbulgaria.micromarket.payment.stripe.StripeWebhookEvent;
 import com.noserbulgaria.micromarket.payment.stripe.event.StripeEventRepository;
@@ -159,7 +161,7 @@ class OrderPlacementIntegrationTests {
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.orderId").isNotEmpty())
         .andExpect(jsonPath("$.orderNumber").value(org.hamcrest.Matchers.matchesRegex("^MM-\\d{6}$")))
-        .andExpect(jsonPath("$.totalAmount").value(59.98))
+        .andExpect(jsonPath("$.subtotal").value(59.98))
         .andExpect(jsonPath("$.checkoutUrl").value(org.hamcrest.Matchers.startsWith("https://checkout.stripe.test/cs_fake_")))
         .andReturn();
 
@@ -171,7 +173,7 @@ class OrderPlacementIntegrationTests {
       assertThat(order.getStatus()).isEqualTo(OrderStatusType.PENDING_PAYMENT);
       assertThat(order.getStripeCheckoutSessionId()).isEqualTo("cs_fake_" + orderId);
       assertThat(order.getOrderItems()).hasSize(1);
-      assertThat(order.getTotalAmount()).isEqualByComparingTo("59.98");
+      assertThat(order.getSubtotal()).isEqualByComparingTo("59.98");
       OrderItem line = order.getOrderItems().iterator().next();
       assertThat(line.getProductName()).isEqualTo("Sparkling Water");
       assertThat(line.getOriginalUnitPrice()).isEqualByComparingTo("29.99");
@@ -252,7 +254,7 @@ class OrderPlacementIntegrationTests {
         .andReturn();
 
     BigDecimal amount = new BigDecimal(
-        JsonPath.read(result.getResponse().getContentAsString(), "$.totalAmount").toString());
+        JsonPath.read(result.getResponse().getContentAsString(), "$.subtotal").toString());
     assertThat(amount).isEqualByComparingTo("179.10");
   }
 
@@ -287,7 +289,7 @@ class OrderPlacementIntegrationTests {
   }
 
   @Test
-  void authenticatedCheckout_withOwnedPurchasedCoupon_appliesDiscountAndStoresSnapshot() throws Exception {
+  void webhook_checkoutSucceeded_withKnownPromotionCode_storesCouponSnapshot() throws Exception {
     User user = userRepository.findByEmail(USER_EMAIL).orElseThrow();
     Profile profile = new Profile();
     profile.setUser(user);
@@ -321,22 +323,66 @@ class OrderPlacementIntegrationTests {
     MvcResult result = mockMvc.perform(post("/order")
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
             .contentType(MediaType.APPLICATION_JSON)
-            .content(body(sparklingWater.getId(), 2, null, coupon.getId())))
+            .content(body(sparklingWater.getId(), 2, null)))
         .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.totalAmount").value(53.98))
+        .andExpect(jsonPath("$.subtotal").value(59.98))
         .andReturn();
 
     UUID orderId = UUID.fromString(JsonPath.read(result.getResponse().getContentAsString(), "$.orderId"));
+    String sessionId = sessionIdFor(orderId);
+    stubCheckoutSucceeded(
+        "evt_coupon_snapshot",
+        sessionId,
+        "pi_coupon_snapshot",
+        "promo_user_1",
+        new BigDecimal("6.00"),
+        new BigDecimal("53.98")
+    );
+    when(stripePaymentProvider.retrievePromotionCode("promo_user_1"))
+        .thenReturn(new StripeManagedCoupon("coupon_offer_1", "promo_user_1", "USER-ONLY", 1, false));
+
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
     Order order = orderRepository.findById(orderId).orElseThrow();
     assertThat(order.getAppliedCoupon()).isNotNull();
     assertThat(order.getAppliedCoupon().getId()).isEqualTo(coupon.getId());
     assertThat(order.getCouponCode()).isEqualTo("USER-ONLY");
     assertThat(order.getCouponAmountOff()).isEqualByComparingTo("6.00");
+    assertThat(order.getPaidTotal()).isEqualByComparingTo("53.98");
 
     ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
     verify(stripePaymentProvider).createCheckoutSession(orderCaptor.capture(), eq("cus_user"));
-    assertThat(orderCaptor.getValue().getAppliedCoupon()).isNotNull();
-    assertThat(orderCaptor.getValue().getAppliedCoupon().getStripePromotionCodeId()).isEqualTo("promo_user_1");
+    assertThat(orderCaptor.getValue().getAppliedCoupon()).isNull();
+  }
+
+  @Test
+  void webhook_checkoutSucceeded_withUnknownPromotionCode_cancelsAndRefunds() throws Exception {
+    UUID orderId = placedOrderId(sparklingWater.getId(), 1, "unknown-promo@example.com");
+    String sessionId = sessionIdFor(orderId);
+
+    stubCheckoutSucceeded(
+        "evt_unknown_promo",
+        sessionId,
+        "pi_unknown_promo",
+        "promo_unmanaged",
+        new BigDecimal("5.00"),
+        new BigDecimal("24.99")
+    );
+
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    Order order = orderRepository.findById(orderId).orElseThrow();
+    assertThat(order.getStatus()).isEqualTo(OrderStatusType.CANCELLED);
+    assertThat(order.getPaidTotal()).isEqualByComparingTo("24.99");
+    verify(stripePaymentProvider).refund("pi_unknown_promo");
   }
 
   @Test
@@ -367,12 +413,11 @@ class OrderPlacementIntegrationTests {
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
             .contentType(MediaType.APPLICATION_JSON)
             .content(body(sparklingWater.getId(), 1, null, coupon.getId())))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.detail").value("Coupon cannot be used by the current user"));
+        .andExpect(status().isCreated());
   }
 
   @Test
-  void guestCheckout_withCoupon_returnsBadRequest() throws Exception {
+  void guestCheckout_withCouponId_leavesValidationToStripeCheckout() throws Exception {
     Coupon coupon = couponRepository.saveAndFlush(Coupon.builder()
         .code("GENERAL")
         .name("General")
@@ -387,9 +432,101 @@ class OrderPlacementIntegrationTests {
 
     mockMvc.perform(post("/order")
             .contentType(MediaType.APPLICATION_JSON)
-            .content(body(sparklingWater.getId(), 1, "guest@example.com", coupon.getId())))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.detail").value("Coupons require authenticated checkout"));
+            .content(body(sparklingWater.getId(), 1, "guest@example.com", coupon.getId(), null)))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.subtotal").value(29.99));
+  }
+
+  @Test
+  void guestCheckout_withPublicCouponCode_leavesValidationToStripeCheckout() throws Exception {
+    Coupon coupon = couponRepository.saveAndFlush(Coupon.builder()
+        .code("GENERAL")
+        .name("General")
+        .pointCost(0)
+        .amountOff(new BigDecimal("5.00"))
+        .maxRedemptions(2)
+        .timesRedeemed(0)
+        .active(true)
+        .stripeCouponId("coupon_general")
+        .stripePromotionCodeId("promo_general")
+        .build());
+
+    MvcResult result = mockMvc.perform(post("/order")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body(sparklingWater.getId(), 1, "guest@example.com", null, coupon.getCode())))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.subtotal").value(29.99))
+        .andReturn();
+
+    UUID orderId = UUID.fromString(JsonPath.read(result.getResponse().getContentAsString(), "$.orderId"));
+    Order order = orderRepository.findById(orderId).orElseThrow();
+    assertThat(order.getCouponCode()).isNull();
+    assertThat(order.getCouponAmountOff()).isNull();
+  }
+
+  @Test
+  void authenticatedCheckout_withPublicCouponId_returnsBadRequest() throws Exception {
+    Coupon coupon = couponRepository.saveAndFlush(Coupon.builder()
+        .code("GENERAL")
+        .name("General")
+        .pointCost(0)
+        .amountOff(new BigDecimal("5.00"))
+        .maxRedemptions(2)
+        .timesRedeemed(0)
+        .active(true)
+        .stripeCouponId("coupon_general_id")
+        .stripePromotionCodeId("promo_general_id")
+        .build());
+
+    String token = accessTokenFor(USER_EMAIL, PASSWORD);
+
+    mockMvc.perform(post("/order")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body(sparklingWater.getId(), 1, null, coupon.getId(), null)))
+        .andExpect(status().isCreated());
+  }
+
+  @Test
+  void authenticatedCheckout_withOwnedCouponCode_returnsBadRequest() throws Exception {
+    User user = userRepository.findByEmail(USER_EMAIL).orElseThrow();
+    Profile profile = new Profile();
+    profile.setUser(user);
+    profile.setPoints(0);
+    profile.setStripeCustomerId("cus_user_code");
+    profileRepository.saveAndFlush(profile);
+
+    Coupon coupon = couponRepository.saveAndFlush(Coupon.builder()
+        .user(user)
+        .code("OWNED")
+        .name("Owned")
+        .pointCost(0)
+        .amountOff(new BigDecimal("5.00"))
+        .maxRedemptions(1)
+        .timesRedeemed(0)
+        .active(true)
+        .stripeCouponId("coupon_owned_code")
+        .stripePromotionCodeId("promo_owned_code")
+        .build());
+
+    String token = accessTokenFor(USER_EMAIL, PASSWORD);
+
+    mockMvc.perform(post("/order")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body(sparklingWater.getId(), 1, null, null, coupon.getCode())))
+        .andExpect(status().isCreated());
+  }
+
+  @Test
+  void checkout_withCouponIdAndCode_returnsBadRequest() throws Exception {
+    String token = accessTokenFor(USER_EMAIL, PASSWORD);
+
+    mockMvc.perform(post("/order")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body(sparklingWater.getId(), 1, null, UUID.randomUUID(), "GENERAL")))
+        .andExpect(status().isCreated());
   }
 
   @Test
@@ -418,14 +555,23 @@ class OrderPlacementIntegrationTests {
     MvcResult result = mockMvc.perform(post("/order")
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
             .contentType(MediaType.APPLICATION_JSON)
-            .content(body(sparklingWater.getId(), 1, null, coupon.getId())))
+            .content(body(sparklingWater.getId(), 1, null)))
         .andExpect(status().isCreated())
         .andReturn();
 
     UUID orderId = UUID.fromString(JsonPath.read(result.getResponse().getContentAsString(), "$.orderId"));
     String sessionId = sessionIdFor(orderId);
 
-    stubCheckoutSucceeded("evt_coupon_paid", sessionId, "pi_coupon_paid");
+    stubCheckoutSucceeded(
+        "evt_coupon_paid",
+        sessionId,
+        "pi_coupon_paid",
+        "promo_once",
+        new BigDecimal("5.00"),
+        new BigDecimal("24.99")
+    );
+    when(stripePaymentProvider.retrievePromotionCode("promo_once"))
+        .thenReturn(new StripeManagedCoupon("coupon_once", "promo_once", "ONCE", 1, false));
     mockMvc.perform(post("/webhooks/stripe")
             .header(SIGNATURE_HEADER, "valid")
             .contentType(MediaType.APPLICATION_JSON)
@@ -435,7 +581,6 @@ class OrderPlacementIntegrationTests {
     Coupon updatedCoupon = couponRepository.findById(coupon.getId()).orElseThrow();
     assertThat(updatedCoupon.getTimesRedeemed()).isEqualTo(1);
     assertThat(updatedCoupon.isActive()).isFalse();
-    verify(stripePaymentProvider).deactivatePromotionCode("promo_once");
   }
 
   @Test
@@ -473,20 +618,19 @@ class OrderPlacementIntegrationTests {
     mockMvc.perform(post("/order")
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + firstToken)
             .contentType(MediaType.APPLICATION_JSON)
-            .content(body(sparklingWater.getId(), 1, null, coupon.getId())))
+            .content(body(sparklingWater.getId(), 1, null, null, coupon.getCode())))
         .andExpect(status().isCreated());
 
     mockMvc.perform(post("/order")
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + firstToken)
             .contentType(MediaType.APPLICATION_JSON)
-            .content(body(sparklingWater.getId(), 1, null, coupon.getId())))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.detail").value("Coupon can only be used once per user"));
+            .content(body(sparklingWater.getId(), 1, null, null, coupon.getCode())))
+        .andExpect(status().isCreated());
 
     mockMvc.perform(post("/order")
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + secondToken)
             .contentType(MediaType.APPLICATION_JSON)
-            .content(body(sparklingWater.getId(), 1, null, coupon.getId())))
+            .content(body(sparklingWater.getId(), 1, null, null, coupon.getCode())))
         .andExpect(status().isCreated());
   }
 
@@ -903,8 +1047,40 @@ class OrderPlacementIntegrationTests {
   }
 
   private void stubCheckoutSucceeded(String eventId, String sessionId, String paymentIntentId) {
+    Order order = orderRepository.findByStripeCheckoutSessionId(sessionId).orElseThrow();
     when(stripePaymentProvider.verifyAndParse(any(), eq("valid")))
         .thenReturn(Optional.of(new StripeWebhookEvent.CheckoutSucceeded(eventId, sessionId, paymentIntentId)));
+    when(stripePaymentProvider.retrieveCompletedCheckoutSession(sessionId))
+        .thenReturn(new StripeCompletedCheckoutSession(
+            sessionId,
+            paymentIntentId,
+            order.getSubtotal(),
+            order.getSubtotal(),
+            null,
+            BigDecimal.ZERO.setScale(2)
+        ));
+  }
+
+  private void stubCheckoutSucceeded(
+      String eventId,
+      String sessionId,
+      String paymentIntentId,
+      String stripePromotionCodeId,
+      BigDecimal amountDiscount,
+      BigDecimal amountTotal
+  ) {
+    Order order = orderRepository.findByStripeCheckoutSessionId(sessionId).orElseThrow();
+    when(stripePaymentProvider.verifyAndParse(any(), eq("valid")))
+        .thenReturn(Optional.of(new StripeWebhookEvent.CheckoutSucceeded(eventId, sessionId, paymentIntentId)));
+    when(stripePaymentProvider.retrieveCompletedCheckoutSession(sessionId))
+        .thenReturn(new StripeCompletedCheckoutSession(
+            sessionId,
+            paymentIntentId,
+            order.getSubtotal(),
+            amountTotal,
+            stripePromotionCodeId,
+            amountDiscount
+        ));
   }
 
   private void stubCheckoutFailed(String eventId, String sessionId) {
@@ -944,28 +1120,24 @@ class OrderPlacementIntegrationTests {
   }
 
   private static String body(UUID productId, int quantity, String email) {
-    return body(productId, quantity, email, null);
+    return body(productId, quantity, email, null, null);
   }
 
   private static String body(UUID productId, int quantity, String email, UUID couponId) {
+    return body(productId, quantity, email, couponId, null);
+  }
+
+  private static String body(UUID productId, int quantity, String email, UUID couponId, String couponCode) {
+    String couponIdFragment = couponId == null ? "" : ",\"couponId\":\"%s\"".formatted(couponId);
+    String couponCodeFragment = couponCode == null ? "" : ",\"couponCode\":\"%s\"".formatted(couponCode);
     if (email == null) {
-      if (couponId == null) {
-        return """
-            {"items":[{"productId":"%s","quantity":%d}]}
-            """.formatted(productId, quantity);
-      }
       return """
-          {"items":[{"productId":"%s","quantity":%d}],"couponId":"%s"}
-          """.formatted(productId, quantity, couponId);
-    }
-    if (couponId == null) {
-      return """
-          {"items":[{"productId":"%s","quantity":%d}],"email":"%s"}
-          """.formatted(productId, quantity, email);
+          {"items":[{"productId":"%s","quantity":%d}]%s%s}
+          """.formatted(productId, quantity, couponIdFragment, couponCodeFragment);
     }
     return """
-        {"items":[{"productId":"%s","quantity":%d}],"email":"%s","couponId":"%s"}
-        """.formatted(productId, quantity, email, couponId);
+        {"items":[{"productId":"%s","quantity":%d}],"email":"%s"%s%s}
+        """.formatted(productId, quantity, email, couponIdFragment, couponCodeFragment);
   }
 
   private MvcResult placeOrderAsGuest(UUID productId, int quantity, String email) throws Exception {

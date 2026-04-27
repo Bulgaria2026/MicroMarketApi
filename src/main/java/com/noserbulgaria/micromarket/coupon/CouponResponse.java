@@ -22,8 +22,6 @@ public record CouponResponse(
 
     @Nullable String name,
 
-    @Nullable Instant startDate,
-
     @Nullable Instant expiryDate,
 
     int pointCost,

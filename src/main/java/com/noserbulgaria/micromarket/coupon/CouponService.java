@@ -1,6 +1,5 @@
 package com.noserbulgaria.micromarket.coupon;
 
-import com.noserbulgaria.micromarket.auth.user.CustomUserDetails;
 import com.noserbulgaria.micromarket.auth.user.User;
 import com.noserbulgaria.micromarket.auth.user.UserRepository;
 import com.noserbulgaria.micromarket.couponoffer.CouponOffer;
@@ -9,9 +8,6 @@ import com.noserbulgaria.micromarket.customer.ProfileRepository;
 import com.noserbulgaria.micromarket.exception.BadRequestApiException;
 import com.noserbulgaria.micromarket.exception.ConflictApiException;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
-import com.noserbulgaria.micromarket.order.Order;
-import com.noserbulgaria.micromarket.order.OrderRepository;
-import com.noserbulgaria.micromarket.order.OrderStatusType;
 import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCoupon;
 import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCouponRequest;
 import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
@@ -28,9 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
-import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -38,36 +34,39 @@ import java.util.UUID;
 @Transactional
 public class CouponService {
 
-  private static final EnumSet<OrderStatusType> USER_USAGE_STATUSES =
-      EnumSet.of(OrderStatusType.PENDING_PAYMENT, OrderStatusType.PAID, OrderStatusType.REFUNDED);
-
   private final CouponRepository couponRepository;
   private final UserRepository userRepository;
   private final ProfileRepository profileRepository;
   private final CouponMapper couponMapper;
   private final StripePaymentProvider stripePaymentProvider;
-  private final OrderRepository orderRepository;
 
-  @Transactional(readOnly = true)
   public Page<CouponResponse> findAll(Specification<Coupon> spec, Pageable pageable) {
-    return couponRepository.findAll(spec, pageable)
-        .map(couponMapper::toDto);
+    Page<Coupon> coupons = couponRepository.findAll(spec, pageable);
+    coupons.forEach(this::syncStripeState);
+
+    return coupons.map(couponMapper::toDto);
   }
 
-  @Transactional(readOnly = true)
   public Page<CouponResponse> findOwn(UUID userId, @Nullable Boolean active, Pageable pageable) {
-    return couponRepository.findAll(
-            Specification.allOf(
-                (root, _, cb) -> cb.equal(root.get(Coupon_.user).get("id"), userId),
-                active == null ? Specification.unrestricted() : (root, _, cb) -> cb.equal(root.get(Coupon_.active), active)
-            ),
-            pageable)
-        .map(couponMapper::toDto);
+    Page<Coupon> coupons = couponRepository.findAll(
+        Specification.allOf(
+            (root, _, cb) ->
+                cb.equal(root.get(Coupon_.user).get("id"), userId),
+            active == null
+                ? Specification.unrestricted()
+                : (root, _, cb) ->
+                cb.equal(root.get(Coupon_.active), active)
+        ),
+        pageable
+    );
+    coupons.forEach(this::syncStripeState);
+
+    return coupons.map(couponMapper::toDto);
   }
 
-  @Transactional(readOnly = true)
   public CouponResponse getByIdOrThrow(UUID id) {
     return couponRepository.findById(id)
+        .map(this::syncStripeState)
         .map(couponMapper::toDto)
         .orElseThrow(() -> new NotFoundApiException("Coupon with id '%s' not found".formatted(id)));
   }
@@ -109,7 +108,8 @@ public class CouponService {
     }
 
     applyLocalState(coupon, input);
-    return couponMapper.toDto(couponRepository.saveAndFlush(coupon));
+    couponRepository.saveAndFlush(coupon);
+    return couponMapper.toDto(syncStripeState(coupon));
   }
 
   public CouponResponse issuePurchasedCoupon(CouponOffer couponOffer, User user) {
@@ -132,7 +132,6 @@ public class CouponService {
         .user(user)
         .code(stripeCoupon.code())
         .name(couponOffer.getName())
-        .startDate(couponOffer.getStartDate())
         .expiryDate(couponOffer.getExpiryDate())
         .pointCost(couponOffer.getPointCost())
         .amountOff(couponOffer.getAmountOff())
@@ -146,59 +145,15 @@ public class CouponService {
     return couponMapper.toDto(couponRepository.saveAndFlush(coupon));
   }
 
-  @Transactional(readOnly = true)
-  public @Nullable Coupon resolveForCheckout(@Nullable UUID couponId, @Nullable CustomUserDetails userDetails, UUID customerId) {
-    if (couponId == null) {
-      return null;
-    }
-    if (userDetails == null) {
-      throw new BadRequestApiException("Coupons require authenticated checkout");
-    }
-
-    Coupon coupon = couponRepository.findById(couponId)
-        .orElseThrow(() -> new NotFoundApiException("Coupon with id '%s' not found".formatted(couponId)));
-
-    validateForCheckout(coupon, userDetails.getId(), customerId);
-    return coupon;
+  public Optional<Coupon> findByStripePromotionCodeIdSynced(String stripePromotionCodeId) {
+    return couponRepository.findByStripePromotionCodeId(stripePromotionCodeId)
+        .map(this::syncStripeState);
   }
 
-  public void markRedeemed(Order order) {
-    Coupon coupon = order.getAppliedCoupon();
-    if (coupon == null) {
-      return;
-    }
-
-    int nextTimesRedeemed = coupon.getTimesRedeemed() + 1;
-    coupon.setTimesRedeemed(nextTimesRedeemed);
-    Integer maxRedemptions = coupon.getMaxRedemptions();
-    if (maxRedemptions != null && nextTimesRedeemed >= maxRedemptions && coupon.isActive()) {
-      coupon.setActive(false);
-      stripePaymentProvider.deactivatePromotionCode(coupon.getStripePromotionCodeId());
-    }
-    couponRepository.save(coupon);
-  }
-
-  private void validateForCheckout(Coupon coupon, UUID userId, UUID customerId) {
-    Instant now = Instant.now();
-    if (!coupon.isActive()) {
-      throw new BadRequestApiException("Coupon is inactive");
-    }
-    if (coupon.getStartDate() != null && coupon.getStartDate().isAfter(now)) {
-      throw new BadRequestApiException("Coupon is not yet active");
-    }
-    if (coupon.getExpiryDate() != null && !coupon.getExpiryDate().isAfter(now)) {
-      throw new BadRequestApiException("Coupon has expired");
-    }
-    if (coupon.getUser() != null && !coupon.getUser().getId().equals(userId)) {
-      throw new BadRequestApiException("Coupon cannot be used by the current user");
-    }
-    Integer maxRedemptions = coupon.getMaxRedemptions();
-    if (maxRedemptions != null && coupon.getTimesRedeemed() >= maxRedemptions) {
-      throw new BadRequestApiException("Coupon has no remaining redemptions");
-    }
-    if (orderRepository.existsByAppliedCouponIdAndCustomerIdAndStatusIn(coupon.getId(), customerId, USER_USAGE_STATUSES)) {
-      throw new BadRequestApiException("Coupon can only be used once per user");
-    }
+  public Coupon syncStripeState(Coupon coupon) {
+    StripeManagedCoupon stripeCoupon = stripePaymentProvider.retrievePromotionCode(coupon.getStripePromotionCodeId());
+    applyStripeState(coupon, stripeCoupon);
+    return couponRepository.saveAndFlush(coupon);
   }
 
   private void applyLocalState(Coupon coupon, ResolvedCouponInput input) {
@@ -206,7 +161,6 @@ public class CouponService {
     coupon.setUser(input.user());
     coupon.setCode(input.code());
     coupon.setName(input.name());
-    coupon.setStartDate(input.startDate());
     coupon.setExpiryDate(input.expiryDate());
     coupon.setPointCost(input.pointCost());
     coupon.setAmountOff(input.amountOff());
@@ -232,14 +186,12 @@ public class CouponService {
 
   private ResolvedCouponInput resolveDirectCouponInputForCreate(CouponRequest request) {
     User user = resolveUser(request.userId());
-    validateDates(request.startDate(), request.expiryDate());
     String code = request.code() != null ? normalizeCode(request.code()) : generateCouponCode();
     ensureCodeAvailable(code, null);
     return new ResolvedCouponInput(
         user,
         code,
         normalizeName(request.name()),
-        request.startDate(),
         request.expiryDate(),
         request.pointCost() == null ? 0 : request.pointCost(),
         normalizeAmountOff(request.amountOff()),
@@ -250,14 +202,12 @@ public class CouponService {
 
   private ResolvedCouponInput resolveDirectCouponInputForUpdate(Coupon coupon, CouponRequest request) {
     User user = resolveUser(request.userId());
-    validateDates(request.startDate(), request.expiryDate());
     String code = request.code() != null ? normalizeCode(request.code()) : coupon.getCode();
     ensureCodeAvailable(code, coupon.getId());
     return new ResolvedCouponInput(
         user,
         code,
         normalizeName(request.name()),
-        request.startDate(),
         request.expiryDate(),
         request.pointCost() == null ? 0 : request.pointCost(),
         normalizeAmountOff(request.amountOff()),
@@ -308,12 +258,6 @@ public class CouponService {
     } catch (DataIntegrityViolationException ex) {
       return profileRepository.findByUserId(user.getId())
           .orElseThrow(() -> ex);
-    }
-  }
-
-  private void validateDates(@Nullable Instant startDate, @Nullable Instant expiryDate) {
-    if (startDate != null && expiryDate != null && !expiryDate.isAfter(startDate)) {
-      throw new BadRequestApiException("expiryDate must be after startDate");
     }
   }
 
@@ -387,7 +331,6 @@ public class CouponService {
       @Nullable User user,
       String code,
       @Nullable String name,
-      @Nullable Instant startDate,
       @Nullable Instant expiryDate,
       int pointCost,
       BigDecimal amountOff,

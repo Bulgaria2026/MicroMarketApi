@@ -21,6 +21,6 @@ public class OrderPlacementService {
     String stripeCustomerId = transactions.ensureStripeCustomer(order.getCustomer().getId(), order.getEmail());
     StripeCheckoutSession session = stripePaymentProvider.createCheckoutSession(order, stripeCustomerId);
     transactions.attachCheckoutSession(order.getId(), session.id());
-    return new PlaceOrderResponse(order.getId(), order.getOrderNumber(), order.getTotalAmount(), session.url());
+    return new PlaceOrderResponse(order.getId(), order.getOrderNumber(), order.getSubtotal(), session.url());
   }
 }

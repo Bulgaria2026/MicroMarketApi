@@ -25,7 +25,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -34,7 +33,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -83,6 +81,18 @@ class CouponControllerIntegrationTests {
           request.code(),
           0,
           request.active()
+      );
+    });
+    when(stripePaymentProvider.retrievePromotionCode(any())).thenAnswer(invocation -> {
+      String stripePromotionCodeId = invocation.getArgument(0);
+      Coupon coupon = couponRepository.findByStripePromotionCodeId(stripePromotionCodeId)
+          .orElseThrow();
+      return new StripeManagedCoupon(
+          coupon.getStripeCouponId(),
+          coupon.getStripePromotionCodeId(),
+          coupon.getCode(),
+          coupon.getTimesRedeemed(),
+          coupon.isActive()
       );
     });
   }
@@ -198,7 +208,6 @@ class CouponControllerIntegrationTests {
                 {
                   "code": "LOCAL-ONLY",
                   "name": "Local only",
-                  "startDate": "2026-05-01T00:00:00Z",
                   "pointCost": 25,
                   "amountOff": 5.00,
                   "maxRedemptions": 3,
@@ -206,13 +215,11 @@ class CouponControllerIntegrationTests {
                 }
                 """))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.pointCost").value(25))
-        .andExpect(jsonPath("$.startDate").value("2026-05-01T00:00:00Z"));
+        .andExpect(jsonPath("$.pointCost").value(25));
 
     Coupon updated = couponRepository.findById(coupon.getId()).orElseThrow();
     assertThat(updated.getPointCost()).isEqualTo(25);
-    assertThat(updated.getStartDate()).isEqualTo(Instant.parse("2026-05-01T00:00:00Z"));
-    verifyNoInteractions(stripePaymentProvider);
+    verify(stripePaymentProvider).retrievePromotionCode("promo_old");
   }
 
   @Test

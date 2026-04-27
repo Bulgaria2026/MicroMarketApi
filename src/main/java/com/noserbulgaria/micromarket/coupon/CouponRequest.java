@@ -34,10 +34,6 @@ public record CouponRequest(
     String name,
 
     @Nullable
-    @Schema(example = "2026-04-23T09:00:00Z")
-    Instant startDate,
-
-    @Nullable
     @Schema(example = "2026-12-31T23:59:59Z")
     Instant expiryDate,
 

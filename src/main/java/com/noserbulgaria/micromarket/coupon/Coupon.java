@@ -55,8 +55,6 @@ public class Coupon extends ExtendedEntity {
   @Column(length = 40)
   private @Nullable String name;
 
-  private @Nullable Instant startDate;
-
   private @Nullable Instant expiryDate;
 
   @Min(0)

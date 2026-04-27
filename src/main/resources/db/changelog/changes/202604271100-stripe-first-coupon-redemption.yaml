@@ -1,0 +1,43 @@
+databaseChangeLog:
+  - changeSet:
+      id: 202604271100-1
+      author: Codex
+      changes:
+        - dropColumn:
+            tableName: coupon
+            columnName: start_date
+        - dropColumn:
+            tableName: coupon_aud
+            columnName: start_date
+
+  - changeSet:
+      id: 202604271100-2
+      author: Codex
+      changes:
+        - renameColumn:
+            tableName: orders
+            oldColumnName: total_amount
+            newColumnName: subtotal
+            columnDataType: decimal(10,2)
+        - addColumn:
+            tableName: orders
+            columns:
+              - column:
+                  name: paid_total
+                  type: decimal(10,2)
+
+  - changeSet:
+      id: 202604271100-3
+      author: Codex
+      changes:
+        - renameColumn:
+            tableName: orders_aud
+            oldColumnName: total_amount
+            newColumnName: subtotal
+            columnDataType: decimal(10,2)
+        - addColumn:
+            tableName: orders_aud
+            columns:
+              - column:
+                  name: paid_total
+                  type: decimal(10,2)

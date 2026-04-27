@@ -88,7 +88,7 @@ class OrderControllerTest {
         .status(OrderStatusType.PENDING_PAYMENT)
         .customer(testProfile)
         .email("admin@test.local")
-        .totalAmount(new BigDecimal("21.00"))
+        .subtotal(new BigDecimal("21.00"))
         .build();
 
     OrderItem item = OrderItem.builder()
@@ -125,7 +125,8 @@ class OrderControllerTest {
         .andExpect(jsonPath("$.content[0].orderNumber").value("MM-T00001"))
         .andExpect(jsonPath("$.content[0].customerId").value(testProfile.getId().toString()))
         .andExpect(jsonPath("$.content[0].email").value("admin@test.local"))
-        .andExpect(jsonPath("$.content[0].totalAmount").value(21.00))
+        .andExpect(jsonPath("$.content[0].subtotal").value(21.00))
+        .andExpect(jsonPath("$.content[0].paidTotal").doesNotExist())
         .andExpect(jsonPath("$.content[0].orderItems").isArray())
         .andExpect(jsonPath("$.content[0].orderItems.length()").value(1))
         .andExpect(jsonPath("$.content[0].orderItems[0].productId").value(testProduct.getId().toString()))
@@ -144,7 +145,8 @@ class OrderControllerTest {
         .andExpect(jsonPath("$.orderNumber").value("MM-T00001"))
         .andExpect(jsonPath("$.customerId").value(testProfile.getId().toString()))
         .andExpect(jsonPath("$.email").value("admin@test.local"))
-        .andExpect(jsonPath("$.totalAmount").value(21.00))
+        .andExpect(jsonPath("$.subtotal").value(21.00))
+        .andExpect(jsonPath("$.paidTotal").doesNotExist())
         .andExpect(jsonPath("$.orderItems").isArray())
         .andExpect(jsonPath("$.orderItems.length()").value(1))
         .andExpect(jsonPath("$.orderItems[0].productId").value(testProduct.getId().toString()))
@@ -162,7 +164,7 @@ class OrderControllerTest {
         .status(OrderStatusType.PAID)
         .customer(testProfile)
         .email("admin@test.local")
-        .totalAmount(new BigDecimal("10.50"))
+        .subtotal(new BigDecimal("10.50"))
         .build();
     orderRepository.saveAndFlush(filteredOut);
 
@@ -203,7 +205,7 @@ class OrderControllerTest {
         .andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()))
         .andExpect(jsonPath("$.content[0].orderNumber").value("MM-T00001"))
         .andExpect(jsonPath("$.content[0].customerId").value(testProfile.getId().toString()))
-        .andExpect(jsonPath("$.content[0].totalAmount").value(21.00))
+        .andExpect(jsonPath("$.content[0].subtotal").value(21.00))
         .andExpect(jsonPath("$.content[0].orderItems.length()").value(1))
         .andExpect(jsonPath("$.content[0].orderItems[0].productId").value(testProduct.getId().toString()))
         .andExpect(jsonPath("$.content[0].orderItems[0].productName").value("Cola"))

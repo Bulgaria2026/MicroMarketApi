@@ -1,8 +1,6 @@
 package com.noserbulgaria.micromarket.checkout;
 
 import com.noserbulgaria.micromarket.auth.user.CustomUserDetails;
-import com.noserbulgaria.micromarket.coupon.Coupon;
-import com.noserbulgaria.micromarket.coupon.CouponService;
 import com.noserbulgaria.micromarket.customer.Customer;
 import com.noserbulgaria.micromarket.customer.CustomerRepository;
 import com.noserbulgaria.micromarket.customer.CustomerResolver;
@@ -41,7 +39,6 @@ public class OrderPlacementTransactions {
   private final OrderRepository orderRepository;
   private final CustomerRepository customerRepository;
   private final CustomerResolver customerResolver;
-  private final CouponService couponService;
   private final StripePaymentProvider stripePaymentProvider;
   private final OrderNumberGenerator orderNumberGenerator;
 
@@ -53,24 +50,18 @@ public class OrderPlacementTransactions {
   public Order createPendingOrder(PlaceOrderRequest request, @Nullable CustomUserDetails userDetails) {
     List<ResolvedItem> items = resolveItems(request.items());
     Customer customer = customerResolver.resolveForCheckout(userDetails, request.email());
-    Coupon coupon = couponService.resolveForCheckout(request.couponId(), userDetails, customer.getId());
     String email = resolveEmail(userDetails, request);
 
     BigDecimal subtotal = items.stream()
         .map(this::itemTotal)
         .reduce(BigDecimal.ZERO, BigDecimal::add);
-    BigDecimal couponAmountOff = appliedCouponDiscount(coupon, subtotal);
-    BigDecimal total = subtotal.subtract(couponAmountOff).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
 
     Order order = Order.builder()
         .orderNumber(orderNumberGenerator.next())
         .status(OrderStatusType.PENDING_PAYMENT)
         .customer(customer)
-        .appliedCoupon(coupon)
-        .couponCode(coupon == null ? null : coupon.getCode())
-        .couponAmountOff(coupon == null ? null : couponAmountOff)
         .email(email)
-        .totalAmount(total)
+        .subtotal(subtotal.setScale(2, RoundingMode.HALF_UP))
         .build();
     for (ResolvedItem item : items) {
       order.getOrderItems().add(toOrderItem(order, item));
@@ -166,10 +157,4 @@ public class OrderPlacementTransactions {
     return product.getPrice().multiply(multiplier).divide(ONE_HUNDRED, 2, RoundingMode.HALF_UP);
   }
 
-  private BigDecimal appliedCouponDiscount(@Nullable Coupon coupon, BigDecimal subtotal) {
-    if (coupon == null) {
-      return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-    }
-    return coupon.getAmountOff().min(subtotal).setScale(2, RoundingMode.HALF_UP);
-  }
 }

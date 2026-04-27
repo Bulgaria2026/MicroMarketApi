@@ -128,7 +128,6 @@ class CouponOfferControllerIntegrationTests {
   }
 
   @Test
-  @WithUserDetails(value = USER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void catalog_returnsOnlyCurrentlyPurchasableOffers() throws Exception {
     couponOfferRepository.saveAndFlush(CouponOffer.builder()
         .name("Visible")
@@ -151,6 +150,35 @@ class CouponOfferControllerIntegrationTests {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(1))
         .andExpect(jsonPath("$[0].name").value("Visible"));
+  }
+
+  @Test
+  void purchase_withoutAuthentication_returnsUnauthorized() throws Exception {
+    CouponOffer offer = couponOfferRepository.saveAndFlush(CouponOffer.builder()
+        .name("Visible")
+        .pointCost(10)
+        .amountOff(new BigDecimal("5.00"))
+        .active(true)
+        .stripeCouponId("coupon_visible_purchase")
+        .build());
+
+    mockMvc.perform(post("/coupon-offer/{id}/purchase", offer.getId()))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void purchase_asAdmin_returnsForbidden() throws Exception {
+    CouponOffer offer = couponOfferRepository.saveAndFlush(CouponOffer.builder()
+        .name("Visible")
+        .pointCost(10)
+        .amountOff(new BigDecimal("5.00"))
+        .active(true)
+        .stripeCouponId("coupon_visible_admin")
+        .build());
+
+    mockMvc.perform(post("/coupon-offer/{id}/purchase", offer.getId()))
+        .andExpect(status().isForbidden());
   }
 
   @Test

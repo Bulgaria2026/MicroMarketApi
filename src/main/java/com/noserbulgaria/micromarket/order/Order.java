@@ -73,8 +73,13 @@ public class Order extends ExtendedEntity {
   @Column(unique = true)
   private @Nullable String stripePaymentIntentId;
 
+  /** The paid amount w/o any discounts or coupons applied before stripe confirmation */
   @Column(nullable = false, precision = 10, scale = 2)
-  private BigDecimal totalAmount;
+  private BigDecimal subtotal;
+
+  /** Actually paid amount, confirmed by stripe */
+  @Column(precision = 10, scale = 2)
+  private @Nullable BigDecimal paidTotal;
 
   @Builder.Default
   @EqualsAndHashCode.Exclude

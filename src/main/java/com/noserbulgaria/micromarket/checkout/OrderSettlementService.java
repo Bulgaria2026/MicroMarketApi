@@ -1,10 +1,12 @@
 package com.noserbulgaria.micromarket.checkout;
 
 import com.noserbulgaria.micromarket.coupon.CouponService;
+import com.noserbulgaria.micromarket.coupon.Coupon;
 import com.noserbulgaria.micromarket.order.Order;
 import com.noserbulgaria.micromarket.order.OrderItem;
 import com.noserbulgaria.micromarket.order.OrderService;
 import com.noserbulgaria.micromarket.order.OrderStatusType;
+import com.noserbulgaria.micromarket.payment.stripe.StripeCompletedCheckoutSession;
 import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
 import com.noserbulgaria.micromarket.product.ProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /** Settles an order once Stripe resolves the Checkout. */
 @Slf4j
@@ -29,9 +32,17 @@ public class OrderSettlementService {
   @Transactional
   public void handleCheckoutSucceeded(String stripeCheckoutSessionId, String stripePaymentIntentId) {
     Order order = orderService.findByStripeCheckoutSessionIdOrThrow(stripeCheckoutSessionId);
-    order.setStripePaymentIntentId(stripePaymentIntentId);
+    StripeCompletedCheckoutSession completedSession =
+        stripePaymentProvider.retrieveCompletedCheckoutSession(stripeCheckoutSessionId);
+    String resolvedPaymentIntentId = Objects.requireNonNullElse(completedSession.paymentIntentId(), stripePaymentIntentId);
+    order.setStripePaymentIntentId(resolvedPaymentIntentId);
+    order.setPaidTotal(completedSession.amountTotal());
     if (order.getStatus() != OrderStatusType.PENDING_PAYMENT) {
       log.info("Ignoring checkout.succeeded for order {} (status {})", order.getId(), order.getStatus());
+      return;
+    }
+
+    if (!reconcileCoupon(order, completedSession, resolvedPaymentIntentId)) {
       return;
     }
 
@@ -45,13 +56,12 @@ public class OrderSettlementService {
             item.getProduct().getId(), order.getId()
         );
         order.transitionTo(OrderStatusType.CANCELLED);
-        stripePaymentProvider.refund(stripePaymentIntentId);
+        stripePaymentProvider.refund(resolvedPaymentIntentId);
         return;
       }
       product.setAmount(product.getAmount() - item.getQuantity());
       decremented.add(item);
     }
-    couponService.markRedeemed(order);
     order.transitionTo(OrderStatusType.PAID);
   }
 
@@ -108,5 +118,36 @@ public class OrderSettlementService {
       productRepository.findByIdForUpdate(item.getProduct().getId())
           .ifPresent(product -> product.setAmount(product.getAmount() + item.getQuantity()));
     }
+  }
+
+  private boolean reconcileCoupon(
+      Order order,
+      StripeCompletedCheckoutSession completedSession,
+      String stripePaymentIntentId
+  ) {
+    String stripePromotionCodeId = completedSession.stripePromotionCodeId();
+    if (stripePromotionCodeId == null) {
+      order.setAppliedCoupon(null);
+      order.setCouponCode(null);
+      order.setCouponAmountOff(null);
+      return true;
+    }
+
+    Coupon coupon = couponService.findByStripePromotionCodeIdSynced(stripePromotionCodeId)
+        .orElse(null);
+    if (coupon == null) {
+      log.error(
+          "Stripe Checkout session {} used unmanaged promotion code {} for order {} — cancelling + refunding",
+          completedSession.id(), stripePromotionCodeId, order.getId()
+      );
+      order.transitionTo(OrderStatusType.CANCELLED);
+      stripePaymentProvider.refund(stripePaymentIntentId);
+      return false;
+    }
+
+    order.setAppliedCoupon(coupon);
+    order.setCouponCode(coupon.getCode());
+    order.setCouponAmountOff(completedSession.amountDiscount());
+    return true;
   }
 }

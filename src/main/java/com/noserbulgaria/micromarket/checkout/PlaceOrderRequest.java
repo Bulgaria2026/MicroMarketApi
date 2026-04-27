@@ -6,14 +6,11 @@ import jakarta.validation.constraints.NotEmpty;
 import org.jspecify.annotations.Nullable;
 
 import java.util.List;
-import java.util.UUID;
 
 public record PlaceOrderRequest(
 
     @NotEmpty @Valid List<PlaceOrderItem> items,
 
-    @Email @Nullable String email,
-
-    @Nullable UUID couponId
+    @Email @Nullable String email
 ) {
 }

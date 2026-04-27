@@ -1,7 +1,11 @@
 package com.noserbulgaria.micromarket.payment.stripe;
 
+import com.noserbulgaria.micromarket.exception.StripeApiException;
 import com.noserbulgaria.micromarket.order.Order;
 import com.stripe.StripeClient;
+import com.stripe.exception.ApiConnectionException;
+import com.stripe.exception.InvalidRequestException;
+import com.stripe.exception.RateLimitException;
 import com.stripe.model.Charge;
 import com.stripe.model.Coupon;
 import com.stripe.model.Event;
@@ -30,6 +34,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -191,14 +196,11 @@ class StripePaymentProviderTest {
   }
 
   @Test
-  void createCheckoutSession_withCouponAddsPromotionCodeDiscount() throws Exception {
+  void createCheckoutSession_allowsPromotionCodesWithoutBackendDiscount() throws Exception {
     UUID orderId = UUID.randomUUID();
     Order order = new Order();
     order.setId(orderId);
     order.setOrderNumber("MM-123456");
-    com.noserbulgaria.micromarket.coupon.Coupon coupon = new com.noserbulgaria.micromarket.coupon.Coupon();
-    coupon.setStripePromotionCodeId("promo_123");
-    order.setAppliedCoupon(coupon);
 
     Session resultSession = new Session();
     resultSession.setId("cs_test_abc");
@@ -214,8 +216,8 @@ class StripePaymentProviderTest {
 
     ArgumentCaptor<SessionCreateParams> captor = ArgumentCaptor.forClass(SessionCreateParams.class);
     verify(sessionService).create(captor.capture(), any(RequestOptions.class));
-    assertThat(captor.getValue().getDiscounts()).hasSize(1);
-    assertThat(captor.getValue().getDiscounts().getFirst().getPromotionCode()).isEqualTo("promo_123");
+    assertThat(captor.getValue().getAllowPromotionCodes()).isTrue();
+    assertThat(captor.getValue().getDiscounts()).isNull();
   }
 
   @Test
@@ -254,6 +256,64 @@ class StripePaymentProviderTest {
     provider.deleteCoupon("coupon_123");
 
     verify(couponService).delete("coupon_123");
+  }
+
+  @Test
+  void retrievePromotionCode_invalidRequestMapsToNotFound() throws Exception {
+    when(stripeClient.v1()).thenReturn(v1Services);
+    when(v1Services.promotionCodes()).thenReturn(promotionCodeService);
+    when(promotionCodeService.retrieve("promo_missing"))
+        .thenThrow(new InvalidRequestException("No such promotion_code", "id", "req_123", "resource_missing", 404, null));
+
+    assertThatThrownBy(() -> provider.retrievePromotionCode("promo_missing"))
+        .isInstanceOf(StripeApiException.class)
+        .hasMessage("Failed to retrieve Stripe promotion code promo_missing");
+  }
+
+  @Test
+  void deleteCoupon_rateLimitMapsToTooManyRequests() throws Exception {
+    when(stripeClient.v1()).thenReturn(v1Services);
+    when(v1Services.coupons()).thenReturn(couponService);
+    when(couponService.delete("coupon_123"))
+        .thenThrow(new RateLimitException("Too many requests", null, "req_123", "rate_limit", 429, null));
+
+    assertThatThrownBy(() -> provider.deleteCoupon("coupon_123"))
+        .isInstanceOf(StripeApiException.class)
+        .hasMessage("Failed to delete Stripe coupon coupon_123");
+  }
+
+  @Test
+  void createCheckoutSession_connectionFailureMapsToServiceUnavailable() throws Exception {
+    Order order = new Order();
+    order.setId(UUID.randomUUID());
+    order.setOrderNumber("MM-123456");
+
+    when(stripeClient.v1()).thenReturn(v1Services);
+    when(v1Services.checkout()).thenReturn(checkoutService);
+    when(checkoutService.sessions()).thenReturn(sessionService);
+    when(sessionService.create(any(SessionCreateParams.class), any(RequestOptions.class)))
+        .thenThrow(new ApiConnectionException("Stripe unreachable"));
+
+    assertThatThrownBy(() -> provider.createCheckoutSession(order, "cus_test"))
+        .isInstanceOf(StripeApiException.class)
+        .hasMessage("Failed to create Stripe Checkout session for order %s".formatted(order.getId()));
+  }
+
+  @Test
+  void retrievePromotionCodeWithoutCouponReferenceMapsToBadGateway() throws Exception {
+    PromotionCode promotionCode = new PromotionCode();
+    promotionCode.setId("promo_orphan");
+    promotionCode.setCode("ORPHAN");
+    promotionCode.setTimesRedeemed(0L);
+    promotionCode.setActive(true);
+
+    when(stripeClient.v1()).thenReturn(v1Services);
+    when(v1Services.promotionCodes()).thenReturn(promotionCodeService);
+    when(promotionCodeService.retrieve("promo_orphan")).thenReturn(promotionCode);
+
+    assertThatThrownBy(() -> provider.retrievePromotionCode("promo_orphan"))
+        .isInstanceOf(StripeApiException.class)
+        .hasMessage("Stripe promotion code promo_orphan has no coupon reference");
   }
 
   @Test
