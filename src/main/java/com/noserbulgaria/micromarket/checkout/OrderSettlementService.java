@@ -2,6 +2,7 @@ package com.noserbulgaria.micromarket.checkout;
 
 import com.noserbulgaria.micromarket.coupon.CouponService;
 import com.noserbulgaria.micromarket.coupon.Coupon;
+import com.noserbulgaria.micromarket.mail.order.OrderConfirmedEvent;
 import com.noserbulgaria.micromarket.order.Order;
 import com.noserbulgaria.micromarket.order.OrderItem;
 import com.noserbulgaria.micromarket.order.OrderService;
@@ -11,6 +12,7 @@ import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
 import com.noserbulgaria.micromarket.product.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ public class OrderSettlementService {
   private final OrderService orderService;
   private final ProductRepository productRepository;
   private final StripePaymentProvider stripePaymentProvider;
+  private final ApplicationEventPublisher events;
   private final CouponService couponService;
 
   @Transactional
@@ -63,6 +66,7 @@ public class OrderSettlementService {
       decremented.add(item);
     }
     order.transitionTo(OrderStatusType.PAID);
+    events.publishEvent(new OrderConfirmedEvent(order.getId()));
   }
 
   @Transactional

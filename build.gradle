@@ -17,6 +17,14 @@ java {
 
 repositories {
     mavenCentral()
+    maven {
+        name = "GitHubPackagesMicroMarketMail"
+        url = uri("https://maven.pkg.github.com/Bulgaria2026/MicroMarketMail")
+        credentials {
+            username = System.getenv("GITHUB_USERNAME") ?: (findProperty("gpr.user") as String ?: "")
+            password = System.getenv("GITHUB_TOKEN")    ?: (findProperty("gpr.key")  as String ?: "")
+        }
+    }
 }
 
 ext {
@@ -26,6 +34,9 @@ ext {
     googleErrorProneCoreVersion = "2.49.0"
     uberNullawayVersion = "0.13.3"
     stripeVersion = "32.0.0"
+    emailTemplatesVersion = "0.2.0-SNAPSHOT"
+    resendVersion = "v4.14.1"
+    springRetryVersion = "2.0.12"
 }
 
 dependencies {
@@ -48,6 +59,12 @@ dependencies {
 
     // Payments
     implementation "com.stripe:stripe-java:${stripeVersion}"
+
+    // Email templates + rendering + transport
+    implementation "com.noserbulgaria.micromarket:email-templates:${emailTemplatesVersion}"
+    implementation "org.springframework.boot:spring-boot-starter-thymeleaf"
+    implementation "org.springframework.retry:spring-retry:${springRetryVersion}"
+    implementation "com.resend:resend-java:${resendVersion}"
 
     // Mapping & Code Generation
     implementation "org.mapstruct:mapstruct:${mapstructVersion}"
