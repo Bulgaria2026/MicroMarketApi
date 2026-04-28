@@ -53,7 +53,7 @@ public class OrderPlacementTransactions {
     String email = resolveEmail(userDetails, request);
 
     BigDecimal subtotal = items.stream()
-        .map(this::itemTotal)
+        .map(this::originalItemTotal)
         .reduce(BigDecimal.ZERO, BigDecimal::add);
 
     Order order = Order.builder()
@@ -131,8 +131,8 @@ public class OrderPlacementTransactions {
     }
   }
 
-  private BigDecimal itemTotal(ResolvedItem item) {
-    return effectiveUnitPrice(item.product())
+  private BigDecimal originalItemTotal(ResolvedItem item) {
+    return item.product().getPrice()
         .multiply(BigDecimal.valueOf(item.quantity()))
         .setScale(2, RoundingMode.HALF_UP);
   }

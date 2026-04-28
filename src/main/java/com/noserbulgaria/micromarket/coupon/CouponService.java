@@ -97,7 +97,7 @@ public class CouponService {
       stripePaymentProvider.deleteCoupon(coupon.getStripeCouponId());
       applyStripeState(coupon, stripeCoupon);
     } else {
-      if (nullableEquals(coupon.getName(), input.name())) {
+      if (differs(coupon.getName(), input.name())) {
         stripePaymentProvider.updateCouponName(coupon.getStripeCouponId(), input.name());
       }
       if (coupon.isActive() != input.active()) {
@@ -179,9 +179,9 @@ public class CouponService {
   private boolean requiresStripeRotation(Coupon coupon, ResolvedCouponInput input) {
     return !coupon.getAmountOff().equals(input.amountOff())
         || !coupon.getCode().equals(input.code())
-        || nullableEquals(coupon.getExpiryDate(), input.expiryDate())
-        || nullableEquals(coupon.getMaxRedemptions(), input.maxRedemptions())
-        || nullableEquals(userId(coupon.getUser()), userId(input.user()));
+        || differs(coupon.getExpiryDate(), input.expiryDate())
+        || differs(coupon.getMaxRedemptions(), input.maxRedemptions())
+        || differs(userId(coupon.getUser()), userId(input.user()));
   }
 
   private ResolvedCouponInput resolveDirectCouponInputForCreate(CouponRequest request) {
@@ -309,7 +309,7 @@ public class CouponService {
     return user == null ? null : user.getId();
   }
 
-  private static boolean nullableEquals(@Nullable Object left, @Nullable Object right) {
+  private static boolean differs(@Nullable Object left, @Nullable Object right) {
     return !Objects.equals(left, right);
   }
 

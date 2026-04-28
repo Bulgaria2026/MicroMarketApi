@@ -42,7 +42,6 @@ public class CouponOfferController {
 
   @Operation(summary = "Purchase a coupon offer with points")
   @ApiResponse(responseCode = "201", description = "Coupon purchased and issued")
-  @PreAuthorize("hasRole('USER')")
   @PostMapping("/{id}/purchase")
   @ResponseStatus(HttpStatus.CREATED)
   public CouponResponse purchase(

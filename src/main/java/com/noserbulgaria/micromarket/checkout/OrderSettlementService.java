@@ -2,6 +2,9 @@ package com.noserbulgaria.micromarket.checkout;
 
 import com.noserbulgaria.micromarket.coupon.CouponService;
 import com.noserbulgaria.micromarket.coupon.Coupon;
+import com.noserbulgaria.micromarket.customer.LoyaltyProperties;
+import com.noserbulgaria.micromarket.customer.PointChangeReason;
+import com.noserbulgaria.micromarket.customer.ProfileRepository;
 import com.noserbulgaria.micromarket.mail.order.OrderConfirmedEvent;
 import com.noserbulgaria.micromarket.order.Order;
 import com.noserbulgaria.micromarket.order.OrderItem;
@@ -16,6 +19,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -31,6 +36,8 @@ public class OrderSettlementService {
   private final StripePaymentProvider stripePaymentProvider;
   private final ApplicationEventPublisher events;
   private final CouponService couponService;
+  private final ProfileRepository profileRepository;
+  private final LoyaltyProperties loyaltyProperties;
 
   @Transactional
   public void handleCheckoutSucceeded(String stripeCheckoutSessionId, String stripePaymentIntentId) {
@@ -65,6 +72,7 @@ public class OrderSettlementService {
       product.setAmount(product.getAmount() - item.getQuantity());
       decremented.add(item);
     }
+    awardPoints(order, completedSession.amountTotal());
     order.transitionTo(OrderStatusType.PAID);
     events.publishEvent(new OrderConfirmedEvent(order.getId()));
   }
@@ -121,6 +129,22 @@ public class OrderSettlementService {
     for (OrderItem item : decremented) {
       productRepository.findByIdForUpdate(item.getProduct().getId())
           .ifPresent(product -> product.setAmount(product.getAmount() + item.getQuantity()));
+    }
+  }
+
+  private void awardPoints(Order order, BigDecimal paidTotal) {
+    if (order.isPointsAwarded()) {
+      return;
+    }
+    long points = paidTotal.multiply(loyaltyProperties.pointsPerEuro())
+        .setScale(0, RoundingMode.DOWN)
+        .longValueExact();
+    if (points <= 0) {
+      return;
+    }
+    int updated = profileRepository.addPoints(order.getCustomer().getId(), points, PointChangeReason.ORDER_EARNED);
+    if (updated == 1) {
+      order.setPointsAwarded(true);
     }
   }
 

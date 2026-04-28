@@ -47,6 +47,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -71,6 +72,7 @@ class OrderConfirmationMailIntegrationTest {
   @Autowired private ProfileRepository profileRepository;
   @Autowired private CustomerRepository customerRepository;
   @Autowired private StripeEventRepository stripeEventRepository;
+  @Autowired private TransactionTemplate transactionTemplate;
 
   @MockitoBean private StripePaymentProvider stripePaymentProvider;
   @MockitoBean private MailSender mailSender;
@@ -145,8 +147,8 @@ class OrderConfirmationMailIntegrationTest {
     assertThat(orderVar).isInstanceOf(OrderConfirmationView.class);
     OrderConfirmationView view = (OrderConfirmationView) orderVar;
     assertThat(view.number()).isEqualTo(orderNumber);
-    assertThat(view.subtotal()).isEqualByComparingTo("26.82");
-    assertThat(view.totalDiscount()).isEqualByComparingTo("0.00");
+    assertThat(view.subtotal()).isEqualByComparingTo("29.80");
+    assertThat(view.totalDiscount()).isEqualByComparingTo("2.98");
     assertThat(view.total()).isEqualByComparingTo("26.82"); // 14.90 * 2 * (1 - 0.10)
     assertThat(view.items()).hasSize(1);
     OrderConfirmationView.Item item = view.items().getFirst();
@@ -175,15 +177,20 @@ class OrderConfirmationMailIntegrationTest {
   }
 
   private void stubCheckoutSucceeded(String eventId, String sessionId, String paymentIntentId) {
-    Order order = orderRepository.findByStripeCheckoutSessionId(sessionId).orElseThrow();
+    BigDecimal checkoutTotal = Objects.requireNonNull(transactionTemplate.execute(_ -> {
+      Order order = orderRepository.findByStripeCheckoutSessionId(sessionId).orElseThrow();
+      return order.getOrderItems().stream()
+          .map(item -> item.getPriceAtPurchase().multiply(BigDecimal.valueOf(item.getQuantity())))
+          .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }));
     when(stripePaymentProvider.verifyAndParse(any(), eq("valid")))
         .thenReturn(Optional.of(new StripeWebhookEvent.CheckoutSucceeded(eventId, sessionId, paymentIntentId)));
     when(stripePaymentProvider.retrieveCompletedCheckoutSession(sessionId))
         .thenReturn(new StripeCompletedCheckoutSession(
             sessionId,
             paymentIntentId,
-            order.getSubtotal(),
-            order.getSubtotal(),
+            checkoutTotal,
+            checkoutTotal,
             null,
             BigDecimal.ZERO.setScale(2)
         ));

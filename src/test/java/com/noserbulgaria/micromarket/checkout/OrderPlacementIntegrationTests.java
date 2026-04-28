@@ -12,6 +12,7 @@ import com.noserbulgaria.micromarket.customer.Customer;
 import com.noserbulgaria.micromarket.customer.CustomerRepository;
 import com.noserbulgaria.micromarket.customer.Guest;
 import com.noserbulgaria.micromarket.customer.GuestRepository;
+import com.noserbulgaria.micromarket.customer.PointChangeReason;
 import com.noserbulgaria.micromarket.customer.Profile;
 import com.noserbulgaria.micromarket.customer.ProfileRepository;
 import com.noserbulgaria.micromarket.exception.BadRequestApiException;
@@ -61,7 +62,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = "loyalty.points-per-euro=2")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class OrderPlacementIntegrationTests {
@@ -246,7 +247,7 @@ class OrderPlacementIntegrationTests {
   }
 
   @Test
-  void checkout_computesDiscountedTotalServerSide() throws Exception {
+  void checkout_computesUndiscountedSubtotalServerSide() throws Exception {
     MvcResult result = mockMvc.perform(post("/order")
             .contentType(MediaType.APPLICATION_JSON)
             .content(body(coffeeBeans.getId(), 2, "discount@example.com")))
@@ -255,7 +256,7 @@ class OrderPlacementIntegrationTests {
 
     BigDecimal amount = new BigDecimal(
         JsonPath.read(result.getResponse().getContentAsString(), "$.subtotal").toString());
-    assertThat(amount).isEqualByComparingTo("179.10");
+    assertThat(amount).isEqualByComparingTo("199.00");
   }
 
   @Test
@@ -352,6 +353,7 @@ class OrderPlacementIntegrationTests {
     assertThat(order.getAppliedCoupon().getId()).isEqualTo(coupon.getId());
     assertThat(order.getCouponCode()).isEqualTo("USER-ONLY");
     assertThat(order.getCouponAmountOff()).isEqualByComparingTo("6.00");
+    assertThat(order.getSubtotal()).isEqualByComparingTo("59.98");
     assertThat(order.getPaidTotal()).isEqualByComparingTo("53.98");
 
     ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
@@ -386,7 +388,7 @@ class OrderPlacementIntegrationTests {
   }
 
   @Test
-  void authenticatedCheckout_withOtherUsersCoupon_returnsBadRequest() throws Exception {
+  void authenticatedCheckout_withOtherUsersCouponId_ignoresUnsupportedField() throws Exception {
     User owner = userRepository.findByEmail(SECOND_USER_EMAIL).orElseThrow();
     Profile ownerProfile = new Profile();
     ownerProfile.setUser(owner);
@@ -417,7 +419,7 @@ class OrderPlacementIntegrationTests {
   }
 
   @Test
-  void guestCheckout_withCouponId_leavesValidationToStripeCheckout() throws Exception {
+  void guestCheckout_withCouponId_ignoresUnsupportedField() throws Exception {
     Coupon coupon = couponRepository.saveAndFlush(Coupon.builder()
         .code("GENERAL")
         .name("General")
@@ -438,7 +440,7 @@ class OrderPlacementIntegrationTests {
   }
 
   @Test
-  void guestCheckout_withPublicCouponCode_leavesValidationToStripeCheckout() throws Exception {
+  void guestCheckout_withPublicCouponCode_ignoresUnsupportedField() throws Exception {
     Coupon coupon = couponRepository.saveAndFlush(Coupon.builder()
         .code("GENERAL")
         .name("General")
@@ -465,7 +467,7 @@ class OrderPlacementIntegrationTests {
   }
 
   @Test
-  void authenticatedCheckout_withPublicCouponId_returnsBadRequest() throws Exception {
+  void authenticatedCheckout_withPublicCouponId_ignoresUnsupportedField() throws Exception {
     Coupon coupon = couponRepository.saveAndFlush(Coupon.builder()
         .code("GENERAL")
         .name("General")
@@ -488,7 +490,7 @@ class OrderPlacementIntegrationTests {
   }
 
   @Test
-  void authenticatedCheckout_withOwnedCouponCode_returnsBadRequest() throws Exception {
+  void authenticatedCheckout_withOwnedCouponCode_ignoresUnsupportedField() throws Exception {
     User user = userRepository.findByEmail(USER_EMAIL).orElseThrow();
     Profile profile = new Profile();
     profile.setUser(user);
@@ -519,7 +521,7 @@ class OrderPlacementIntegrationTests {
   }
 
   @Test
-  void checkout_withCouponIdAndCode_returnsBadRequest() throws Exception {
+  void checkout_withCouponIdAndCode_ignoresUnsupportedFields() throws Exception {
     String token = accessTokenFor(USER_EMAIL, PASSWORD);
 
     mockMvc.perform(post("/order")
@@ -650,6 +652,41 @@ class OrderPlacementIntegrationTests {
     assertThat(paid.getStatus()).isEqualTo(OrderStatusType.PAID);
     Product refreshed = productRepository.findById(coffeeBeans.getId()).orElseThrow();
     assertThat(refreshed.getAmount()).isEqualTo(3L);
+  }
+
+  @Test
+  void webhook_checkoutSucceeded_awardsConfiguredPointsToAuthenticatedCustomerOnce() throws Exception {
+    String token = accessTokenFor(USER_EMAIL, PASSWORD);
+    MvcResult result = mockMvc.perform(post("/order")
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body(sparklingWater.getId(), 1, null)))
+        .andExpect(status().isCreated())
+        .andReturn();
+    UUID orderId = UUID.fromString(JsonPath.read(result.getResponse().getContentAsString(), "$.orderId"));
+    String sessionId = sessionIdFor(orderId);
+
+    stubCheckoutSucceeded("evt_points", sessionId, "pi_points");
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    Profile profile = profileRepository.findByUserId(userRepository.findByEmail(USER_EMAIL).orElseThrow().getId())
+        .orElseThrow();
+    assertThat(profile.getPoints()).isEqualTo(59L);
+    assertThat(profile.getLastChangeReason()).isEqualTo(PointChangeReason.ORDER_EARNED);
+    assertThat(orderRepository.findById(orderId).orElseThrow().isPointsAwarded()).isTrue();
+
+    mockMvc.perform(post("/webhooks/stripe")
+            .header(SIGNATURE_HEADER, "valid")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isOk());
+
+    Profile replayedProfile = profileRepository.findById(profile.getId()).orElseThrow();
+    assertThat(replayedProfile.getPoints()).isEqualTo(59L);
   }
 
   @Test

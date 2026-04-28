@@ -27,4 +27,19 @@ public interface ProfileRepository extends JpaRepository<Profile, UUID> {
       @Param("points") long points,
       @Param("reason") PointChangeReason reason
   );
+
+  @Modifying
+  @Query(
+      """
+          update Profile p
+          set p.points = p.points + :points,
+              p.lastChangeReason = :reason
+          where p.id = :profileId
+          """
+  )
+  int addPoints(
+      @Param("profileId") UUID profileId,
+      @Param("points") long points,
+      @Param("reason") PointChangeReason reason
+  );
 }
