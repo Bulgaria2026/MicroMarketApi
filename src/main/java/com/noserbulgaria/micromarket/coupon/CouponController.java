@@ -13,9 +13,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -70,9 +70,9 @@ public class CouponController {
   @Operation(summary = "Update an existing coupon")
   @ApiResponse(responseCode = "200", description = "Coupon updated")
   @ApiResponse(responseCode = "404", description = "Coupon or user not found")
-  @PutMapping("/{id}")
+  @PatchMapping("/{id}")
   @PreAuthorize("hasRole('ADMINISTRATOR')")
-  public CouponResponse update(@PathVariable UUID id, @Valid @RequestBody CouponRequest request) {
-    return couponService.updateOrThrow(id, request);
+  public CouponResponse update(@PathVariable UUID id, @Valid @RequestBody CouponPatchRequest request) {
+    return couponService.patchOrThrow(id, request);
   }
 }

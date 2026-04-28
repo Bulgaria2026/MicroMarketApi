@@ -24,7 +24,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -81,34 +80,34 @@ public class CouponService {
     return couponMapper.toDto(couponRepository.saveAndFlush(coupon));
   }
 
-  public CouponResponse updateOrThrow(UUID id, CouponRequest request) {
+  public CouponResponse patchOrThrow(UUID id, CouponPatchRequest request) {
     Coupon coupon = couponRepository.findById(id)
         .orElseThrow(() -> new NotFoundApiException("Coupon with id '%s' not found".formatted(id)));
     if (coupon.getCouponOffer() != null) {
       throw new BadRequestApiException("Purchased coupons cannot be updated manually");
     }
-
-    ResolvedCouponInput input = resolveDirectCouponInputForUpdate(coupon, request);
-
-    if (requiresStripeRotation(coupon, input)) {
-      stripePaymentProvider.deactivatePromotionCode(coupon.getStripePromotionCodeId());
-      StripeManagedCoupon stripeCoupon = stripePaymentProvider.createManagedCoupon(toManagedCouponRequest(input));
-      stripePaymentProvider.deleteCoupon(coupon.getStripeCouponId());
-      applyStripeState(coupon, stripeCoupon);
-    } else {
-      if (differs(coupon.getName(), input.name())) {
-        stripePaymentProvider.updateCouponName(coupon.getStripeCouponId(), input.name());
-      }
-      if (coupon.isActive() != input.active()) {
-        StripeManagedCoupon stripeCoupon = stripePaymentProvider.updatePromotionCodeActive(
-            coupon.getStripePromotionCodeId(), input.active());
-        applyStripeState(coupon, stripeCoupon);
-      }
+    if (!request.unsupportedFields().isEmpty()) {
+      throw new BadRequestApiException(
+          "Unsupported coupon patch field(s): %s".formatted(String.join(", ", request.unsupportedFields())));
+    }
+    if (request.isEmpty()) {
+      throw new BadRequestApiException("Patch must include name or active");
     }
 
-    applyLocalState(coupon, input);
-    couponRepository.saveAndFlush(coupon);
-    return couponMapper.toDto(syncStripeState(coupon));
+    if (request.getName() != null) {
+      coupon.setName(normalizeName(request.getName()));
+    }
+
+    Boolean active = request.getActive();
+    if (active != null && active != coupon.isActive()) {
+      if (active) {
+        throw new BadRequestApiException("Inactive coupons cannot be reactivated");
+      }
+      stripePaymentProvider.deleteCoupon(coupon.getStripeCouponId());
+      coupon.setActive(false);
+    }
+
+    return couponMapper.toDto(couponRepository.saveAndFlush(coupon));
   }
 
   public CouponResponse issuePurchasedCoupon(CouponOffer couponOffer, User user) {
@@ -174,14 +173,6 @@ public class CouponService {
     coupon.setActive(stripeCoupon.active());
   }
 
-  private boolean requiresStripeRotation(Coupon coupon, ResolvedCouponInput input) {
-    return !coupon.getAmountOff().equals(input.amountOff())
-        || !coupon.getCode().equals(input.code())
-        || differs(coupon.getExpiryDate(), input.expiryDate())
-        || differs(coupon.getMaxRedemptions(), input.maxRedemptions())
-        || differs(userId(coupon.getUser()), userId(input.user()));
-  }
-
   private ResolvedCouponInput resolveDirectCouponInputForCreate(CouponRequest request) {
     User user = resolveUser(request.userId());
     String code = request.code() != null ? normalizeCode(request.code()) : generateCouponCode();
@@ -195,22 +186,6 @@ public class CouponService {
         normalizeAmountOff(request.amountOff()),
         normalizeMaxRedemptions(user, request.maxRedemptions()),
         request.active() == null || request.active()
-    );
-  }
-
-  private ResolvedCouponInput resolveDirectCouponInputForUpdate(Coupon coupon, CouponRequest request) {
-    User user = resolveUser(request.userId());
-    String code = request.code() != null ? normalizeCode(request.code()) : coupon.getCode();
-    ensureCodeAvailable(code, coupon.getId());
-    return new ResolvedCouponInput(
-        user,
-        code,
-        normalizeName(request.name()),
-        request.expiryDate(),
-        request.pointCost() == null ? 0 : request.pointCost(),
-        normalizeAmountOff(request.amountOff()),
-        normalizeMaxRedemptions(user, request.maxRedemptions()),
-        request.active() != null ? request.active() : coupon.isActive()
     );
   }
 
@@ -301,14 +276,6 @@ public class CouponService {
 
   private long amountOffInMinorUnits(BigDecimal amountOff) {
     return amountOff.movePointRight(2).longValueExact();
-  }
-
-  private static @Nullable UUID userId(@Nullable User user) {
-    return user == null ? null : user.getId();
-  }
-
-  private static boolean differs(@Nullable Object left, @Nullable Object right) {
-    return !Objects.equals(left, right);
   }
 
   private void ensureCodeAvailable(String code, @Nullable UUID currentCouponId) {

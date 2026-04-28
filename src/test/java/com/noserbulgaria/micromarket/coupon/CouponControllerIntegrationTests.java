@@ -4,6 +4,8 @@ import com.noserbulgaria.micromarket.auth.user.AccountStatus;
 import com.noserbulgaria.micromarket.auth.user.Role;
 import com.noserbulgaria.micromarket.auth.user.User;
 import com.noserbulgaria.micromarket.auth.user.UserRepository;
+import com.noserbulgaria.micromarket.couponoffer.CouponOffer;
+import com.noserbulgaria.micromarket.couponoffer.CouponOfferRepository;
 import com.noserbulgaria.micromarket.customer.Profile;
 import com.noserbulgaria.micromarket.customer.ProfileRepository;
 import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCoupon;
@@ -31,12 +33,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -55,6 +58,8 @@ class CouponControllerIntegrationTests {
   @Autowired
   private CouponRepository couponRepository;
   @Autowired
+  private CouponOfferRepository couponOfferRepository;
+  @Autowired
   private UserRepository userRepository;
   @Autowired
   private ProfileRepository profileRepository;
@@ -69,6 +74,7 @@ class CouponControllerIntegrationTests {
   @BeforeEach
   void setUp() {
     couponRepository.deleteAll();
+    couponOfferRepository.deleteAll();
     ensureUserExists(ADMIN_EMAIL, Role.ADMINISTRATOR);
     ensureUserExists(USER_EMAIL, Role.USER);
 
@@ -199,83 +205,138 @@ class CouponControllerIntegrationTests {
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void updateCoupon_withLocalOnlyChanges_doesNotTouchStripe() throws Exception {
+  void patchCoupon_nameOnly_updatesLocalNameAndDoesNotTouchStripe() throws Exception {
     Coupon coupon = couponRepository.saveAndFlush(coupon("LOCAL-ONLY", null, "coupon_old", "promo_old"));
 
-    mockMvc.perform(put("/coupon/{id}", coupon.getId())
+    mockMvc.perform(patch("/coupon/{id}", coupon.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
-                  "code": "LOCAL-ONLY",
-                  "name": "Local only",
-                  "pointCost": 25,
-                  "amountOff": 5.00,
-                  "maxRedemptions": 3,
-                  "active": true
+                  "name": "Renamed locally"
                 }
                 """))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.pointCost").value(25));
+        .andExpect(jsonPath("$.name").value("Renamed locally"))
+        .andExpect(jsonPath("$.code").value("LOCAL-ONLY"));
 
     Coupon updated = couponRepository.findById(coupon.getId()).orElseThrow();
-    assertThat(updated.getPointCost()).isEqualTo(25);
-    verify(stripePaymentProvider).retrievePromotionCode("promo_old");
+    assertThat(updated.getName()).isEqualTo("Renamed locally");
+    assertThat(updated.getStripeCouponId()).isEqualTo("coupon_old");
+    assertThat(updated.getStripePromotionCodeId()).isEqualTo("promo_old");
+    verify(stripePaymentProvider, never()).updateCouponName(any(), any());
+    verify(stripePaymentProvider, never()).createManagedCoupon(any());
+    verify(stripePaymentProvider, never()).deleteCoupon(any());
+    verify(stripePaymentProvider, never()).updatePromotionCodeActive(any(), anyBoolean());
+    verify(stripePaymentProvider, never()).retrievePromotionCode(any());
   }
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void updateCoupon_activeFalse_retiresCouponInStripeAndLocally() throws Exception {
+  void patchCoupon_activeFalse_deletesStripeCouponAndMarksLocalInactive() throws Exception {
     Coupon coupon = couponRepository.saveAndFlush(coupon("RETIRE-ME", null, "coupon_old", "promo_old"));
-    when(stripePaymentProvider.updatePromotionCodeActive("promo_old", false))
-        .thenReturn(new StripeManagedCoupon("coupon_old", "promo_old", "RETIRE-ME", 1, false));
 
-    mockMvc.perform(put("/coupon/{id}", coupon.getId())
+    mockMvc.perform(patch("/coupon/{id}", coupon.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
-                  "code": "RETIRE-ME",
-                  "name": "Local only",
-                  "pointCost": 10,
-                  "amountOff": 5.00,
-                  "maxRedemptions": 3,
                   "active": false
                 }
                 """))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.active").value(false))
-        .andExpect(jsonPath("$.timesRedeemed").value(1));
+        .andExpect(jsonPath("$.active").value(false));
 
     Coupon updated = couponRepository.findById(coupon.getId()).orElseThrow();
     assertThat(updated.isActive()).isFalse();
-    assertThat(updated.getTimesRedeemed()).isEqualTo(1);
-    verify(stripePaymentProvider).updatePromotionCodeActive("promo_old", false);
+    assertThat(updated.getTimesRedeemed()).isZero();
+    verify(stripePaymentProvider).deleteCoupon("coupon_old");
+    verify(stripePaymentProvider, never()).updatePromotionCodeActive(any(), anyBoolean());
+    verify(stripePaymentProvider, never()).createManagedCoupon(any());
+    verify(stripePaymentProvider, never()).retrievePromotionCode(any());
   }
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void updateCoupon_withImmutableStripeChange_rotatesBackingStripeObjects() throws Exception {
-    Coupon coupon = couponRepository.saveAndFlush(coupon("ROTATE-ME", null, "coupon_old", "promo_old"));
+  void patchCoupon_activeTrueForInactiveCoupon_returnsBadRequest() throws Exception {
+    Coupon coupon = coupon("REACTIVATE-ME", null, "coupon_old", "promo_old");
+    coupon.setActive(false);
+    couponRepository.saveAndFlush(coupon);
 
-    mockMvc.perform(put("/coupon/{id}", coupon.getId())
+    mockMvc.perform(patch("/coupon/{id}", coupon.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {
-                  "code": "ROTATE-ME",
-                  "name": "Local only",
-                  "pointCost": 10,
-                  "amountOff": 8.00,
-                  "maxRedemptions": 3,
                   "active": true
                 }
                 """))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.amountOff").value(8.0));
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.detail").value("Inactive coupons cannot be reactivated"));
 
     Coupon updated = couponRepository.findById(coupon.getId()).orElseThrow();
-    assertThat(updated.getStripeCouponId()).isNotEqualTo("coupon_old");
-    assertThat(updated.getStripePromotionCodeId()).isNotEqualTo("promo_old");
-    verify(stripePaymentProvider).deactivatePromotionCode("promo_old");
-    verify(stripePaymentProvider).deleteCoupon("coupon_old");
+    assertThat(updated.isActive()).isFalse();
+    verify(stripePaymentProvider, never()).deleteCoupon(any());
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void patchCoupon_withImmutableField_returnsBadRequest() throws Exception {
+    Coupon coupon = couponRepository.saveAndFlush(coupon("IMMUTABLE", null, "coupon_old", "promo_old"));
+
+    mockMvc.perform(patch("/coupon/{id}", coupon.getId())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "amountOff": 8.00
+                }
+                """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.detail").value("Unsupported coupon patch field(s): amountOff"));
+
+    Coupon updated = couponRepository.findById(coupon.getId()).orElseThrow();
+    assertThat(updated.getAmountOff()).isEqualByComparingTo("5.00");
+    verify(stripePaymentProvider, never()).deleteCoupon(any());
+    verify(stripePaymentProvider, never()).createManagedCoupon(any());
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void patchCoupon_emptyBody_returnsBadRequest() throws Exception {
+    Coupon coupon = couponRepository.saveAndFlush(coupon("EMPTY", null, "coupon_old", "promo_old"));
+
+    mockMvc.perform(patch("/coupon/{id}", coupon.getId())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.detail").value("Patch must include name or active"));
+
+    verify(stripePaymentProvider, never()).deleteCoupon(any());
+    verify(stripePaymentProvider, never()).createManagedCoupon(any());
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void patchCoupon_purchasedCoupon_returnsBadRequest() throws Exception {
+    CouponOffer offer = couponOfferRepository.saveAndFlush(CouponOffer.builder()
+        .name("Offer")
+        .pointCost(10)
+        .amountOff(new BigDecimal("5.00"))
+        .active(true)
+        .build());
+    Coupon coupon = coupon("PURCHASED", null, "coupon_old", "promo_old");
+    coupon.setCouponOffer(offer);
+    couponRepository.saveAndFlush(coupon);
+
+    mockMvc.perform(patch("/coupon/{id}", coupon.getId())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "name": "Nope"
+                }
+                """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.detail").value("Purchased coupons cannot be updated manually"));
+
+    assertThat(couponRepository.findById(coupon.getId()).orElseThrow().getName()).isEqualTo("Local only");
+    verify(stripePaymentProvider, never()).deleteCoupon(any());
   }
 
   @Test
