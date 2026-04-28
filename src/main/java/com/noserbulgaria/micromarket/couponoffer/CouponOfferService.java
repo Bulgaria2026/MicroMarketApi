@@ -10,7 +10,6 @@ import com.noserbulgaria.micromarket.customer.Profile;
 import com.noserbulgaria.micromarket.customer.ProfileRepository;
 import com.noserbulgaria.micromarket.exception.BadRequestApiException;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
-import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
@@ -34,7 +33,6 @@ public class CouponOfferService {
   private final CouponOfferRepository couponOfferRepository;
   private final CouponOfferMapper couponOfferMapper;
   private final CouponService couponService;
-  private final StripePaymentProvider stripePaymentProvider;
   private final UserRepository userRepository;
   private final ProfileRepository profileRepository;
 
@@ -64,11 +62,9 @@ public class CouponOfferService {
 
   public CouponOfferResponse create(CouponOfferRequest request) {
     validateDates(request.startDate(), request.expiryDate());
-    String stripeCouponId = stripePaymentProvider.createCoupon(amountOffInMinorUnits(request.amountOff()), normalizeName(request.name()));
 
     CouponOffer couponOffer = new CouponOffer();
     applyLocalState(couponOffer, request);
-    couponOffer.setStripeCouponId(stripeCouponId);
     return couponOfferMapper.toDto(couponOfferRepository.saveAndFlush(couponOffer));
   }
 
@@ -79,16 +75,6 @@ public class CouponOfferService {
     validateDates(request.startDate(), request.expiryDate());
     if (request.maxPurchases() != null && request.maxPurchases() < couponOffer.getPurchaseCount()) {
       throw new BadRequestApiException("maxPurchases cannot be less than purchaseCount");
-    }
-
-    String normalizedName = normalizeName(request.name());
-    BigDecimal amountOff = normalizeAmountOff(request.amountOff());
-    if (!couponOffer.getAmountOff().equals(amountOff)) {
-      String replacementStripeCouponId = stripePaymentProvider.createCoupon(
-          amountOffInMinorUnits(amountOff), normalizedName);
-      couponOffer.setStripeCouponId(replacementStripeCouponId);
-    } else if (!couponOffer.getName().equals(normalizedName)) {
-      stripePaymentProvider.updateCouponName(couponOffer.getStripeCouponId(), normalizedName);
     }
 
     applyLocalState(couponOffer, request);
@@ -184,9 +170,5 @@ public class CouponOfferService {
     } catch (ArithmeticException ex) {
       throw new BadRequestApiException("amountOff must have at most 2 decimal places");
     }
-  }
-
-  private long amountOffInMinorUnits(BigDecimal amountOff) {
-    return normalizeAmountOff(amountOff).movePointRight(2).longValueExact();
   }
 }

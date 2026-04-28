@@ -38,9 +38,6 @@ databaseChangeLog:
                   name: active
                   valueBoolean: true
               - column:
-                  name: stripe_coupon_id
-                  value: "seed_coupon_offer_coffee_5"
-              - column:
                   name: created_at
                   valueDate: "2026-04-01T00:00:00"
               - column:
@@ -80,9 +77,6 @@ databaseChangeLog:
                   name: active
                   valueBoolean: true
               - column:
-                  name: stripe_coupon_id
-                  value: "seed_coupon_offer_lunch_10"
-              - column:
                   name: created_at
                   valueDate: "2026-04-01T00:00:00"
               - column:
@@ -121,9 +115,6 @@ databaseChangeLog:
               - column:
                   name: active
                   valueBoolean: true
-              - column:
-                  name: stripe_coupon_id
-                  value: "seed_coupon_offer_vip_25"
               - column:
                   name: created_at
                   valueDate: "2026-04-01T00:00:00"

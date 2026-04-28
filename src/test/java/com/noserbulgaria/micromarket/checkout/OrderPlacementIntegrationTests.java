@@ -303,7 +303,6 @@ class OrderPlacementIntegrationTests {
         .pointCost(30)
         .amountOff(new BigDecimal("6.00"))
         .active(true)
-        .stripeCouponId("coupon_offer_1")
         .build());
     Coupon coupon = couponRepository.saveAndFlush(Coupon.builder()
         .couponOffer(offer)

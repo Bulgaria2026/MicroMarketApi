@@ -55,6 +55,4 @@ public class CouponOffer extends ExtendedEntity {
   @Builder.Default
   private boolean active = true;
 
-  @Column(nullable = false, unique = true)
-  private String stripeCouponId;
 }

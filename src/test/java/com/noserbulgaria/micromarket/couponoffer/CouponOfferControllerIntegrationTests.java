@@ -10,8 +10,8 @@ import com.noserbulgaria.micromarket.customer.PointChangeReason;
 import com.noserbulgaria.micromarket.customer.Profile;
 import com.noserbulgaria.micromarket.customer.ProfileRepository;
 import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCoupon;
+import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCouponRequest;
 import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
-import com.noserbulgaria.micromarket.payment.stripe.StripePromotionCodeRequest;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,8 +34,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -82,14 +80,12 @@ class CouponOfferControllerIntegrationTests {
     User user = ensureUserExists(USER_EMAIL, Role.USER);
     ensureProfile(user, 120, null);
 
-    when(stripePaymentProvider.createCoupon(anyLong(), anyString()))
-        .thenAnswer(invocation -> "coupon_stripe_" + stripeCounter.incrementAndGet());
-    when(stripePaymentProvider.createPromotionCode(anyString(), any()))
+    when(stripePaymentProvider.createManagedCoupon(any()))
         .thenAnswer(invocation -> {
-          StripePromotionCodeRequest request = invocation.getArgument(1);
+          StripeManagedCouponRequest request = invocation.getArgument(0);
           int sequence = stripeCounter.incrementAndGet();
           return new StripeManagedCoupon(
-              invocation.getArgument(0),
+              "coupon_stripe_" + sequence,
               "promo_stripe_" + sequence,
               request.code(),
               0,
@@ -123,8 +119,7 @@ class CouponOfferControllerIntegrationTests {
         .andExpect(jsonPath("$.purchaseCount").value(0))
         .andExpect(jsonPath("$.active").value(true));
 
-    CouponOffer offer = couponOfferRepository.findAll().getFirst();
-    assertThat(offer.getStripeCouponId()).startsWith("coupon_stripe_");
+    assertThat(couponOfferRepository.findAll()).hasSize(1);
   }
 
   @Test
@@ -135,7 +130,6 @@ class CouponOfferControllerIntegrationTests {
         .pointCost(10)
         .amountOff(new BigDecimal("5.00"))
         .active(true)
-        .stripeCouponId("coupon_visible")
         .build());
     couponOfferRepository.saveAndFlush(CouponOffer.builder()
         .name("Inactive")
@@ -143,7 +137,6 @@ class CouponOfferControllerIntegrationTests {
         .pointCost(10)
         .amountOff(new BigDecimal("5.00"))
         .active(false)
-        .stripeCouponId("coupon_inactive")
         .build());
 
     mockMvc.perform(get("/coupon-offer/catalog"))
@@ -159,7 +152,6 @@ class CouponOfferControllerIntegrationTests {
         .pointCost(10)
         .amountOff(new BigDecimal("5.00"))
         .active(true)
-        .stripeCouponId("coupon_visible_purchase")
         .build());
 
     mockMvc.perform(post("/coupon-offer/{id}/purchase", offer.getId()))
@@ -181,7 +173,6 @@ class CouponOfferControllerIntegrationTests {
         .amountOff(new BigDecimal("6.00"))
         .active(true)
         .maxPurchases(3)
-        .stripeCouponId("coupon_offer_stripe")
         .build());
 
     mockMvc.perform(post("/coupon-offer/{id}/purchase", offer.getId()))
@@ -202,20 +193,22 @@ class CouponOfferControllerIntegrationTests {
     assertThat(issuedCoupon.getCouponOffer()).isNotNull();
     assertThat(issuedCoupon.getCouponOffer().getId()).isEqualTo(offer.getId());
     assertThat(issuedCoupon.getMaxRedemptions()).isEqualTo(1);
-    assertThat(issuedCoupon.getStripeCouponId()).isEqualTo("coupon_offer_stripe");
+    assertThat(issuedCoupon.getStripeCouponId()).startsWith("coupon_stripe_");
 
     CouponOffer updatedOffer = couponOfferRepository.findById(offer.getId()).orElseThrow();
     assertThat(updatedOffer.getPurchaseCount()).isEqualTo(1);
 
-    ArgumentCaptor<StripePromotionCodeRequest> captor = ArgumentCaptor.forClass(StripePromotionCodeRequest.class);
-    verify(stripePaymentProvider).createPromotionCode(anyString(), captor.capture());
+    ArgumentCaptor<StripeManagedCouponRequest> captor = ArgumentCaptor.forClass(StripeManagedCouponRequest.class);
+    verify(stripePaymentProvider).createManagedCoupon(captor.capture());
+    assertThat(captor.getValue().amountOff()).isEqualTo(600L);
+    assertThat(captor.getValue().name()).isEqualTo("Issued offer");
     assertThat(captor.getValue().maxRedemptions()).isEqualTo(1);
     assertThat(captor.getValue().stripeCustomerId()).isEqualTo("cus_generated");
   }
 
   @Test
   @WithUserDetails(value = USER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void purchase_sameOfferTwice_reusesStripeCouponButIssuesDistinctCoupons() throws Exception {
+  void purchase_sameOfferTwice_createsDistinctStripeCouponsAndLocalCoupons() throws Exception {
     User user = userRepository.findByEmail(USER_EMAIL).orElseThrow();
     CouponOffer offer = couponOfferRepository.saveAndFlush(CouponOffer.builder()
         .name("Repeatable")
@@ -223,7 +216,6 @@ class CouponOfferControllerIntegrationTests {
         .amountOff(new BigDecimal("3.00"))
         .active(true)
         .maxPurchases(5)
-        .stripeCouponId("shared_stripe_coupon")
         .build());
 
     mockMvc.perform(post("/coupon-offer/{id}/purchase", offer.getId()))
@@ -238,8 +230,9 @@ class CouponOfferControllerIntegrationTests {
         .allSatisfy(coupon -> {
           assertThat(coupon.getUser()).isNotNull();
           assertThat(coupon.getUser().getId()).isEqualTo(user.getId());
-          assertThat(coupon.getStripeCouponId()).isEqualTo("shared_stripe_coupon");
+          assertThat(coupon.getStripeCouponId()).startsWith("coupon_stripe_");
         });
+    assertThat(coupons.get(0).getStripeCouponId()).isNotEqualTo(coupons.get(1).getStripeCouponId());
     assertThat(coupons.get(0).getStripePromotionCodeId()).isNotEqualTo(coupons.get(1).getStripePromotionCodeId());
   }
 
@@ -256,7 +249,6 @@ class CouponOfferControllerIntegrationTests {
         .pointCost(20)
         .amountOff(new BigDecimal("6.00"))
         .active(true)
-        .stripeCouponId("coupon_offer_stripe")
         .build());
 
     mockMvc.perform(post("/coupon-offer/{id}/purchase", offer.getId()))
@@ -277,7 +269,6 @@ class CouponOfferControllerIntegrationTests {
         .active(true)
         .maxPurchases(2)
         .purchaseCount(2)
-        .stripeCouponId("coupon_existing")
         .build());
 
     mockMvc.perform(put("/coupon-offer/{id}", offer.getId())

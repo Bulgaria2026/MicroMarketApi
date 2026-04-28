@@ -11,7 +11,6 @@ import com.noserbulgaria.micromarket.exception.NotFoundApiException;
 import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCoupon;
 import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCouponRequest;
 import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
-import com.noserbulgaria.micromarket.payment.stripe.StripePromotionCodeRequest;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -116,16 +115,15 @@ public class CouponService {
     String code = generateCouponCode();
     ensureCodeAvailable(code, null);
 
-    StripeManagedCoupon stripeCoupon = stripePaymentProvider.createPromotionCode(
-        couponOffer.getStripeCouponId(),
-        new StripePromotionCodeRequest(
-            code,
-            true,
-            couponOffer.getExpiryDate(),
-            1,
-            ensureStripeCustomerId(user)
-        )
-    );
+    StripeManagedCoupon stripeCoupon = stripePaymentProvider.createManagedCoupon(new StripeManagedCouponRequest(
+        amountOffInMinorUnits(couponOffer.getAmountOff()),
+        code,
+        couponOffer.getName(),
+        true,
+        couponOffer.getExpiryDate(),
+        1,
+        ensureStripeCustomerId(user)
+    ));
 
     Coupon coupon = Coupon.builder()
         .couponOffer(couponOffer)
@@ -138,7 +136,7 @@ public class CouponService {
         .maxRedemptions(1)
         .timesRedeemed(stripeCoupon.timesRedeemed())
         .active(stripeCoupon.active())
-        .stripeCouponId(couponOffer.getStripeCouponId())
+        .stripeCouponId(stripeCoupon.stripeCouponId())
         .stripePromotionCodeId(stripeCoupon.stripePromotionCodeId())
         .build();
 
