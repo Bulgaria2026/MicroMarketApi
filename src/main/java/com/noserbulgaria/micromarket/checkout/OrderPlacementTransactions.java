@@ -2,11 +2,13 @@ package com.noserbulgaria.micromarket.checkout;
 
 import com.noserbulgaria.micromarket.auth.user.CustomUserDetails;
 import com.noserbulgaria.micromarket.customer.Customer;
-import com.noserbulgaria.micromarket.customer.CustomerRepository;
 import com.noserbulgaria.micromarket.customer.CustomerResolver;
 import com.noserbulgaria.micromarket.exception.BadRequestApiException;
-import com.noserbulgaria.micromarket.order.*;
-import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
+import com.noserbulgaria.micromarket.order.Order;
+import com.noserbulgaria.micromarket.order.OrderItem;
+import com.noserbulgaria.micromarket.order.OrderNumberGenerator;
+import com.noserbulgaria.micromarket.order.OrderRepository;
+import com.noserbulgaria.micromarket.order.OrderStatusType;
 import com.noserbulgaria.micromarket.product.Product;
 import com.noserbulgaria.micromarket.product.ProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +19,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 
 /** Split into a separate bean so each {@code @Transactional} goes through the proxy (self-invocation wouldn't). */
 @Service
@@ -28,9 +36,7 @@ public class OrderPlacementTransactions {
 
   private final ProductRepository productRepository;
   private final OrderRepository orderRepository;
-  private final CustomerRepository customerRepository;
   private final CustomerResolver customerResolver;
-  private final StripePaymentProvider stripePaymentProvider;
   private final OrderNumberGenerator orderNumberGenerator;
 
   private record ResolvedItem(Product product, int quantity) {
@@ -43,8 +49,8 @@ public class OrderPlacementTransactions {
     Customer customer = customerResolver.resolveForCheckout(userDetails, request.email());
     String email = resolveEmail(userDetails, request);
 
-    BigDecimal total = items.stream()
-        .map(this::itemTotal)
+    BigDecimal subtotal = items.stream()
+        .map(this::originalItemTotal)
         .reduce(BigDecimal.ZERO, BigDecimal::add);
 
     Order order = Order.builder()
@@ -52,24 +58,12 @@ public class OrderPlacementTransactions {
         .status(OrderStatusType.PENDING_PAYMENT)
         .customer(customer)
         .email(email)
-        .totalAmount(total)
+        .subtotal(subtotal.setScale(2, RoundingMode.HALF_UP))
         .build();
     for (ResolvedItem item : items) {
       order.getOrderItems().add(toOrderItem(order, item));
     }
     return orderRepository.saveAndFlush(order);
-  }
-
-  /** Lazily creates and caches a Stripe Customer on the {@code customer} row so repeat orders reuse it. */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public String ensureStripeCustomer(UUID customerId, String email) {
-    Customer customer = customerRepository.findById(customerId).orElseThrow();
-    var existing = customer.getStripeCustomerId();
-    if (existing != null) return existing;
-    String stripeCustomerId = stripePaymentProvider.createCustomer(email);
-    customer.setStripeCustomerId(stripeCustomerId);
-    customerRepository.saveAndFlush(customer);
-    return stripeCustomerId;
   }
 
   /** No-ops if the session id is already set — matches Stripe's own idempotency-key replay semantics. */
@@ -122,8 +116,8 @@ public class OrderPlacementTransactions {
     }
   }
 
-  private BigDecimal itemTotal(ResolvedItem item) {
-    return effectiveUnitPrice(item.product())
+  private BigDecimal originalItemTotal(ResolvedItem item) {
+    return item.product().getPrice()
         .multiply(BigDecimal.valueOf(item.quantity()))
         .setScale(2, RoundingMode.HALF_UP);
   }

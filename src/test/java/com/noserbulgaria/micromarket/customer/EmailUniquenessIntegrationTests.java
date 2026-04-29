@@ -70,7 +70,7 @@ class EmailUniquenessIntegrationTests {
     userRepository.deleteAll();
 
     AtomicInteger counter = new AtomicInteger();
-    when(stripePaymentProvider.createCustomer(any()))
+    when(stripePaymentProvider.createCustomer(any(), any()))
         .thenAnswer(_ -> "cus_fake_" + counter.incrementAndGet());
     when(stripePaymentProvider.createCheckoutSession(any(), any()))
         .thenAnswer(inv -> {

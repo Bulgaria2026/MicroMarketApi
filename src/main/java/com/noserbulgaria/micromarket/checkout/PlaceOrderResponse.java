@@ -10,7 +10,7 @@ public record PlaceOrderResponse(
 
     String orderNumber,
 
-    BigDecimal totalAmount,
+    BigDecimal subtotal,
 
     String checkoutUrl
 

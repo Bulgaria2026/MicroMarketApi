@@ -1,0 +1,184 @@
+databaseChangeLog:
+  - changeSet:
+      id: 202604231200-1
+      author: Codex
+      changes:
+        - createTable:
+            tableName: coupon_offer
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(80)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: varchar(500)
+              - column:
+                  name: start_date
+                  type: timestamp
+              - column:
+                  name: expiry_date
+                  type: timestamp
+              - column:
+                  name: point_cost
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: amount_off
+                  type: decimal(10,2)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: max_purchases
+                  type: int
+              - column:
+                  name: purchase_count
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: active
+                  type: boolean
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp
+
+  - changeSet:
+      id: 202604231200-2
+      author: Codex
+      changes:
+        - createTable:
+            tableName: coupon_offer_aud
+            columns:
+              - column:
+                  name: rev
+                  type: integer
+                  constraints:
+                    nullable: false
+              - column:
+                  name: revtype
+                  type: smallint
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(80)
+              - column:
+                  name: description
+                  type: varchar(500)
+              - column:
+                  name: start_date
+                  type: timestamp
+              - column:
+                  name: expiry_date
+                  type: timestamp
+              - column:
+                  name: point_cost
+                  type: int
+              - column:
+                  name: amount_off
+                  type: decimal(10,2)
+              - column:
+                  name: max_purchases
+                  type: int
+              - column:
+                  name: purchase_count
+                  type: int
+              - column:
+                  name: active
+                  type: boolean
+              - column:
+                  name: created_at
+                  type: timestamp
+              - column:
+                  name: updated_at
+                  type: timestamp
+
+        - addPrimaryKey:
+            tableName: coupon_offer_aud
+            columnNames: rev, id
+            constraintName: pk_coupon_offer_aud
+
+        - addForeignKeyConstraint:
+            baseTableName: coupon_offer_aud
+            baseColumnNames: rev
+            referencedTableName: revinfo
+            referencedColumnNames: rev
+            constraintName: fk_coupon_offer_aud_revinfo
+
+  - changeSet:
+      id: 202604231200-3
+      author: Codex
+      changes:
+        - addColumn:
+            tableName: coupon
+            columns:
+              - column:
+                  name: coupon_offer_id
+                  type: uuid
+
+        - addForeignKeyConstraint:
+            baseTableName: coupon
+            baseColumnNames: coupon_offer_id
+            referencedTableName: coupon_offer
+            referencedColumnNames: id
+            constraintName: fk_coupon_coupon_offer
+
+  - changeSet:
+      id: 202604231200-4
+      author: Codex
+      changes:
+        - addColumn:
+            tableName: coupon_aud
+            columns:
+              - column:
+                  name: coupon_offer_id
+                  type: uuid
+
+  - changeSet:
+      id: 202604231200-5
+      author: Codex
+      changes:
+        - addColumn:
+            tableName: orders
+            columns:
+              - column:
+                  name: coupon_code
+                  type: varchar(500)
+              - column:
+                  name: coupon_amount_off
+                  type: decimal(10,2)
+
+  - changeSet:
+      id: 202604231200-6
+      author: Codex
+      changes:
+        - addColumn:
+            tableName: orders_aud
+            columns:
+              - column:
+                  name: coupon_code
+                  type: varchar(500)
+              - column:
+                  name: coupon_amount_off
+                  type: decimal(10,2)

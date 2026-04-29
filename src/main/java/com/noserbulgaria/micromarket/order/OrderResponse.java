@@ -1,11 +1,10 @@
 package com.noserbulgaria.micromarket.order;
 
-import org.jspecify.annotations.Nullable;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 public record OrderResponse(
 
@@ -21,7 +20,13 @@ public record OrderResponse(
 
     @Nullable String stripeCheckoutSessionId,
 
-    BigDecimal totalAmount,
+    BigDecimal subtotal,
+
+    @Nullable String couponCode,
+
+    @Nullable BigDecimal couponAmountOff,
+
+    @Nullable BigDecimal paidTotal,
 
     Set<OrderItemResponse> orderItems,
 

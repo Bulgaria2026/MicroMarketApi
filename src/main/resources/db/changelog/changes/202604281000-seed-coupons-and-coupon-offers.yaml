@@ -1,0 +1,123 @@
+databaseChangeLog:
+  - changeSet:
+      id: 202604281000-1
+      author: Codex
+      context: dev
+      changes:
+        - insert:
+            tableName: coupon_offer
+            columns:
+              - column:
+                  name: id
+                  value: "d1000000-0000-0000-0000-000000000001"
+              - column:
+                  name: name
+                  value: "Coffee Break Reward"
+              - column:
+                  name: description
+                  value: "Spend points for 5 EUR off coffee and snacks."
+              - column:
+                  name: start_date
+                  valueDate: "2026-04-01T00:00:00"
+              - column:
+                  name: expiry_date
+                  valueDate: "2026-12-31T23:59:59"
+              - column:
+                  name: point_cost
+                  valueNumeric: 100
+              - column:
+                  name: amount_off
+                  valueNumeric: 5.00
+              - column:
+                  name: max_purchases
+                  valueNumeric: 500
+              - column:
+                  name: purchase_count
+                  valueNumeric: 42
+              - column:
+                  name: active
+                  valueBoolean: true
+              - column:
+                  name: created_at
+                  valueDate: "2026-04-01T00:00:00"
+              - column:
+                  name: updated_at
+                  valueDate: "2026-04-01T00:00:00"
+        - insert:
+            tableName: coupon_offer
+            columns:
+              - column:
+                  name: id
+                  value: "d1000000-0000-0000-0000-000000000002"
+              - column:
+                  name: name
+                  value: "Lunch Saver"
+              - column:
+                  name: description
+                  value: "Redeem points for 10 EUR off larger lunch orders."
+              - column:
+                  name: start_date
+                  valueDate: "2026-04-01T00:00:00"
+              - column:
+                  name: expiry_date
+                  valueDate: "2026-12-31T23:59:59"
+              - column:
+                  name: point_cost
+                  valueNumeric: 200
+              - column:
+                  name: amount_off
+                  valueNumeric: 10.00
+              - column:
+                  name: max_purchases
+                  valueNumeric: 300
+              - column:
+                  name: purchase_count
+                  valueNumeric: 87
+              - column:
+                  name: active
+                  valueBoolean: true
+              - column:
+                  name: created_at
+                  valueDate: "2026-04-01T00:00:00"
+              - column:
+                  name: updated_at
+                  valueDate: "2026-04-01T00:00:00"
+        - insert:
+            tableName: coupon_offer
+            columns:
+              - column:
+                  name: id
+                  value: "d1000000-0000-0000-0000-000000000003"
+              - column:
+                  name: name
+                  value: "VIP Market Treat"
+              - column:
+                  name: description
+                  value: "High-value reward for frequent customers."
+              - column:
+                  name: start_date
+                  valueDate: "2026-04-01T00:00:00"
+              - column:
+                  name: expiry_date
+                  valueDate: "2026-12-31T23:59:59"
+              - column:
+                  name: point_cost
+                  valueNumeric: 500
+              - column:
+                  name: amount_off
+                  valueNumeric: 25.00
+              - column:
+                  name: max_purchases
+                  valueNumeric: 100
+              - column:
+                  name: purchase_count
+                  valueNumeric: 12
+              - column:
+                  name: active
+                  valueBoolean: true
+              - column:
+                  name: created_at
+                  valueDate: "2026-04-01T00:00:00"
+              - column:
+                  name: updated_at
+                  valueDate: "2026-04-01T00:00:00"

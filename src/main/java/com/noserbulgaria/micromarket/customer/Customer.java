@@ -8,6 +8,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
@@ -40,6 +41,9 @@ public class Customer extends ExtendedEntity {
   @ToString.Exclude
   @OneToMany(mappedBy = "customer")
   private Set<Order> orders = new HashSet<>();
+
+  @Version
+  private long version;
 
   public boolean isRegistered() {
     return profile != null;

@@ -4,6 +4,8 @@ import com.noserbulgaria.micromarket.auth.user.User;
 import com.noserbulgaria.micromarket.common.ExtendedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.MapsId;
@@ -36,4 +38,7 @@ public class Profile extends ExtendedEntity {
   @Min(0)
   @Column(nullable = false)
   private long points;
+
+  @Enumerated(EnumType.STRING)
+  private PointChangeReason lastChangeReason;
 }

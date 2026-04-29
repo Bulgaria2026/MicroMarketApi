@@ -10,6 +10,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 @Component
 class OrderConfirmationViewMapper {
@@ -22,10 +23,12 @@ class OrderConfirmationViewMapper {
         .map(OrderConfirmationViewMapper::toItem)
         .toList();
 
-    BigDecimal subtotal = items.stream()
-        .map(item -> item.price().multiply(BigDecimal.valueOf(item.amount())))
-        .reduce(BigDecimal.ZERO, BigDecimal::add);
-    BigDecimal totalDiscount = subtotal.subtract(order.getTotalAmount()).max(BigDecimal.ZERO);
+    BigDecimal subtotal = order.getSubtotal();
+    BigDecimal paidTotal = Objects.requireNonNull(
+        order.getPaidTotal(),
+        "paidTotal is required for an order confirmation email"
+    );
+    BigDecimal totalDiscount = subtotal.subtract(paidTotal).max(BigDecimal.ZERO);
 
     String date = DATE.format(order.getCreatedAt().atZone(ZoneId.systemDefault()));
 
@@ -35,7 +38,7 @@ class OrderConfirmationViewMapper {
         items,
         subtotal,
         totalDiscount,
-        order.getTotalAmount());
+        paidTotal);
   }
 
   private static OrderConfirmationView.Item toItem(OrderItem item) {

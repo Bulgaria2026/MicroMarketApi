@@ -3,6 +3,7 @@ package com.noserbulgaria.micromarket.order;
 import com.noserbulgaria.micromarket.customer.Customer;
 import com.noserbulgaria.micromarket.exception.ConflictApiException;
 import com.noserbulgaria.micromarket.common.ExtendedEntity;
+import com.noserbulgaria.micromarket.coupon.Coupon;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -46,6 +47,17 @@ public class Order extends ExtendedEntity {
   @JoinColumn(name = "customer_id", nullable = false)
   private Customer customer;
 
+  @Audited(targetAuditMode = RelationTargetAuditMode.NOT_AUDITED)
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "coupon_id")
+  private @Nullable Coupon appliedCoupon;
+
+  @Column(length = 500)
+  private @Nullable String couponCode;
+
+  @Column(precision = 10, scale = 2)
+  private @Nullable BigDecimal couponAmountOff;
+
   /**
    * Snapshot of the recipient email at order time. Survives later customer-record changes so receipts remain
    * reconstructible.
@@ -61,14 +73,23 @@ public class Order extends ExtendedEntity {
   @Column(unique = true)
   private @Nullable String stripePaymentIntentId;
 
+  /** The paid amount w/o any discounts or coupons applied before stripe confirmation */
   @Column(nullable = false, precision = 10, scale = 2)
-  private BigDecimal totalAmount;
+  private BigDecimal subtotal;
+
+  /** Actually paid amount, confirmed by stripe */
+  @Column(precision = 10, scale = 2)
+  private @Nullable BigDecimal paidTotal;
 
   @Builder.Default
   @EqualsAndHashCode.Exclude
   @ToString.Exclude
   @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
   private Set<OrderItem> orderItems = new HashSet<>();
+
+  @Column(nullable = false)
+  @Builder.Default
+  private boolean pointsAwarded = false;
 
   /**
    * Transitions the order to {@code next} if {@link OrderStatusType#canTransitionTo} allows it. No-op when already

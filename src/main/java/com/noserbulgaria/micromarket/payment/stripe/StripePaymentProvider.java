@@ -1,26 +1,39 @@
 package com.noserbulgaria.micromarket.payment.stripe;
 
 import com.noserbulgaria.micromarket.exception.BadRequestApiException;
+import com.noserbulgaria.micromarket.exception.StripeApiException;
 import com.noserbulgaria.micromarket.order.Order;
 import com.noserbulgaria.micromarket.order.OrderItem;
 import com.stripe.StripeClient;
+import com.stripe.exception.InvalidRequestException;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Charge;
 import com.stripe.model.Event;
+import com.stripe.model.PromotionCode;
 import com.stripe.model.Refund;
 import com.stripe.model.StripeObject;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.RequestOptions;
+import com.stripe.param.CouponCreateParams;
+import com.stripe.param.CouponUpdateParams;
 import com.stripe.param.CustomerCreateParams;
+import com.stripe.param.PromotionCodeCreateParams;
+import com.stripe.param.PromotionCodeUpdateParams;
 import com.stripe.param.RefundCreateParams;
 import com.stripe.param.checkout.SessionCreateParams;
+import com.stripe.param.checkout.SessionRetrieveParams;
+import com.stripe.param.common.EmptyParam;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /** Facade over the Stripe SDK. EUR-only; amounts serialized as integer cents. */
@@ -48,14 +61,129 @@ public class StripePaymentProvider {
   private final StripeProperties properties;
 
   public String createCustomer(String email) {
+    return createCustomer(email, null);
+  }
+
+  public String createCustomer(String email, @Nullable String idempotencyKey) {
     CustomerCreateParams params = CustomerCreateParams.builder()
         .setEmail(email)
         .build();
+    RequestOptions options = idempotencyKey == null
+        ? null
+        : RequestOptions.builder()
+        .setIdempotencyKey(idempotencyKey)
+        .build();
     try {
-      return stripeClient.v1().customers().create(params).getId();
+      return options == null
+          ? stripeClient.v1().customers().create(params).getId()
+          : stripeClient.v1().customers().create(params, options).getId();
     } catch (StripeException ex) {
-      throw new IllegalStateException(
-          "Failed to create Stripe customer for %s".formatted(email), ex);
+      throw new StripeApiException("Failed to create Stripe customer", ex);
+    }
+  }
+
+  public String createCoupon(long amountOff, @Nullable String name) {
+    CouponCreateParams.Builder builder = CouponCreateParams.builder()
+        .setAmountOff(amountOff)
+        .setCurrency(CURRENCY)
+        .setDuration(CouponCreateParams.Duration.ONCE);
+    if (name != null) {
+      builder.setName(name);
+    }
+    try {
+      return stripeClient.v1().coupons().create(builder.build()).getId();
+    } catch (StripeException ex) {
+      throw new StripeApiException("Failed to create Stripe coupon", ex);
+    }
+  }
+
+  public StripeManagedCoupon createManagedCoupon(StripeManagedCouponRequest request) {
+    String stripeCouponId = createCoupon(request.amountOff(), request.name());
+    try {
+      return createPromotionCode(
+          stripeCouponId, new StripePromotionCodeRequest(
+              request.code(),
+              request.active(),
+              request.expiryDate(),
+              request.maxRedemptions(),
+              request.stripeCustomerId()
+          )
+      );
+    } catch (RuntimeException ex) {
+      try {
+        stripeClient.v1().coupons().delete(stripeCouponId);
+      } catch (StripeException cleanupEx) {
+        log.warn("Failed to clean up Stripe coupon {} after promotion code creation failure", stripeCouponId, cleanupEx);
+      }
+      throw ex;
+    }
+  }
+
+  public StripeManagedCoupon createPromotionCode(String stripeCouponId, StripePromotionCodeRequest request) {
+    try {
+      PromotionCode promotionCode = stripeClient.v1().promotionCodes().create(buildPromotionCodeParams(stripeCouponId, request));
+      return toManagedCoupon(stripeCouponId, promotionCode, request.code());
+    } catch (StripeException ex) {
+      throw new StripeApiException("Failed to create Stripe promotion code", ex);
+    }
+  }
+
+  public void updateCouponName(String stripeCouponId, @Nullable String name) {
+    CouponUpdateParams.Builder builder = CouponUpdateParams.builder();
+    if (name == null) {
+      builder.setName(EmptyParam.EMPTY);
+    } else {
+      builder.setName(name);
+    }
+    try {
+      stripeClient.v1().coupons().update(stripeCouponId, builder.build());
+    } catch (StripeException ex) {
+      throw new StripeApiException("Failed to update Stripe coupon %s".formatted(stripeCouponId), ex);
+    }
+  }
+
+  public StripeManagedCoupon updatePromotionCodeActive(String stripePromotionCodeId, boolean active) {
+    PromotionCodeUpdateParams params = PromotionCodeUpdateParams.builder()
+        .setActive(active)
+        .build();
+    try {
+      PromotionCode promotionCode = stripeClient.v1().promotionCodes().update(stripePromotionCodeId, params);
+      String couponId = Optional.ofNullable(promotionCode.getPromotion())
+          .map(PromotionCode.Promotion::getCoupon)
+          .orElseThrow(() -> new StripeApiException(
+              "Stripe promotion code %s has no coupon reference".formatted(stripePromotionCodeId)));
+      return toManagedCoupon(couponId, promotionCode, promotionCode.getCode());
+    } catch (StripeException ex) {
+      throw new StripeApiException("Failed to update Stripe promotion code %s".formatted(stripePromotionCodeId), ex);
+    }
+  }
+
+  public StripeManagedCoupon retrievePromotionCode(String stripePromotionCodeId) {
+    try {
+      PromotionCode promotionCode = stripeClient.v1().promotionCodes().retrieve(stripePromotionCodeId);
+      String couponId = Optional.ofNullable(promotionCode.getPromotion())
+          .map(PromotionCode.Promotion::getCoupon)
+          .orElseThrow(() -> new StripeApiException(
+              "Stripe promotion code %s has no coupon reference".formatted(stripePromotionCodeId)));
+      return toManagedCoupon(couponId, promotionCode, promotionCode.getCode());
+    } catch (StripeException ex) {
+      throw new StripeApiException(
+          "Failed to retrieve Stripe promotion code %s".formatted(stripePromotionCodeId), ex, true);
+    }
+  }
+
+  /** Idempotent: a missing coupon means a previous delete already won, which is the success outcome. */
+  public void deleteCoupon(String stripeCouponId) {
+    try {
+      stripeClient.v1().coupons().delete(stripeCouponId);
+    } catch (InvalidRequestException ex) {
+      if ("resource_missing".equals(ex.getCode())) {
+        log.debug("Stripe coupon {} already deleted; treating as success", stripeCouponId);
+        return;
+      }
+      throw new StripeApiException("Failed to delete Stripe coupon %s".formatted(stripeCouponId), ex);
+    } catch (StripeException ex) {
+      throw new StripeApiException("Failed to delete Stripe coupon %s".formatted(stripeCouponId), ex);
     }
   }
 
@@ -64,6 +192,7 @@ public class StripePaymentProvider {
     SessionCreateParams.Builder builder = SessionCreateParams.builder()
         .setMode(SessionCreateParams.Mode.PAYMENT)
         .setCustomer(stripeCustomerId)
+        .setAllowPromotionCodes(true)
         .setClientReferenceId(order.getId().toString())
         .putMetadata(METADATA_ORDER_NUMBER, order.getOrderNumber())
         .setPaymentIntentData(
@@ -89,7 +218,6 @@ public class StripePaymentProvider {
                       .build())
               .build());
     }
-
     RequestOptions options = RequestOptions.builder()
         .setIdempotencyKey(order.getId().toString())
         .build();
@@ -97,8 +225,28 @@ public class StripePaymentProvider {
       Session session = stripeClient.v1().checkout().sessions().create(builder.build(), options);
       return new StripeCheckoutSession(session.getId(), session.getUrl());
     } catch (StripeException ex) {
-      throw new IllegalStateException(
-          "Failed to create Stripe Checkout session for order %s".formatted(order.getId()), ex);
+      throw new StripeApiException("Failed to create Stripe Checkout session for order %s".formatted(order.getId()), ex);
+    }
+  }
+
+  public StripeCompletedCheckoutSession retrieveCompletedCheckoutSession(String stripeCheckoutSessionId) {
+    SessionRetrieveParams params = SessionRetrieveParams.builder()
+        .addExpand("discounts.promotion_code")
+        .build();
+    try {
+      Session session = stripeClient.v1().checkout().sessions().retrieve(stripeCheckoutSessionId, params);
+      return new StripeCompletedCheckoutSession(
+          session.getId(),
+          session.getPaymentIntent(),
+          amountFromMinorUnits(session.getAmountSubtotal()),
+          amountFromMinorUnits(session.getAmountTotal()),
+          appliedPromotionCodeId(session),
+          amountFromMinorUnits(Optional.ofNullable(session.getTotalDetails())
+              .map(Session.TotalDetails::getAmountDiscount)
+              .orElse(0L))
+      );
+    } catch (StripeException ex) {
+      throw new StripeApiException("Failed to retrieve Stripe Checkout session %s".formatted(stripeCheckoutSessionId), ex, true);
     }
   }
 
@@ -201,13 +349,58 @@ public class StripePaymentProvider {
 
   private <T extends StripeObject> T extractDataObject(Event event, Class<T> type) {
     StripeObject data = event.getDataObjectDeserializer().getObject()
-        .orElseThrow(() -> new IllegalStateException(
+        .orElseThrow(() -> new StripeApiException(
             "Stripe event %s has no deserializable data object".formatted(event.getId())));
     if (!type.isInstance(data)) {
-      throw new IllegalStateException(
+      throw new StripeApiException(
           "Stripe event %s of type %s did not carry a %s".formatted(
               event.getId(), event.getType(), type.getSimpleName()));
     }
     return type.cast(data);
+  }
+
+  private PromotionCodeCreateParams buildPromotionCodeParams(String stripeCouponId, StripePromotionCodeRequest request) {
+    PromotionCodeCreateParams.Builder builder = PromotionCodeCreateParams.builder()
+        .setPromotion(PromotionCodeCreateParams.Promotion.builder()
+            .setType(PromotionCodeCreateParams.Promotion.Type.COUPON)
+            .setCoupon(stripeCouponId)
+            .build())
+        .setCode(request.code())
+        .setActive(request.active());
+    if (request.stripeCustomerId() != null) {
+      builder.setCustomer(request.stripeCustomerId());
+    }
+    if (request.expiryDate() != null) {
+      builder.setExpiresAt(request.expiryDate().getEpochSecond());
+    }
+    if (request.maxRedemptions() != null) {
+      builder.setMaxRedemptions(request.maxRedemptions().longValue());
+    }
+    return builder.build();
+  }
+
+  private StripeManagedCoupon toManagedCoupon(String stripeCouponId, PromotionCode promotionCode, String fallbackCode) {
+    int timesRedeemed = Optional.ofNullable(promotionCode.getTimesRedeemed())
+        .map(Long::intValue)
+        .orElse(0);
+    boolean active = Boolean.TRUE.equals(promotionCode.getActive());
+    String code = Optional.ofNullable(promotionCode.getCode()).orElse(fallbackCode);
+    return new StripeManagedCoupon(stripeCouponId, promotionCode.getId(), code, timesRedeemed, active);
+  }
+
+  private @Nullable String appliedPromotionCodeId(Session session) {
+    List<Session.Discount> discounts = session.getDiscounts();
+    if (discounts == null || discounts.isEmpty()) {
+      return null;
+    }
+    return discounts.stream()
+        .map(Session.Discount::getPromotionCode)
+        .filter(Objects::nonNull)
+        .findFirst()
+        .orElse(null);
+  }
+
+  private BigDecimal amountFromMinorUnits(@Nullable Long amount) {
+    return BigDecimal.valueOf(Optional.ofNullable(amount).orElse(0L), 2);
   }
 }

@@ -17,6 +17,7 @@ import com.noserbulgaria.micromarket.order.Order;
 import com.noserbulgaria.micromarket.order.OrderRepository;
 import com.noserbulgaria.micromarket.order.OrderStatusType;
 import com.noserbulgaria.micromarket.payment.stripe.StripeCheckoutSession;
+import com.noserbulgaria.micromarket.payment.stripe.StripeCompletedCheckoutSession;
 import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
 import com.noserbulgaria.micromarket.payment.stripe.StripeWebhookEvent;
 import com.noserbulgaria.micromarket.payment.stripe.event.StripeEventRepository;
@@ -44,6 +45,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -66,6 +68,7 @@ class OrderConfirmationMailIntegrationTest {
   @Autowired private OrderRepository orderRepository;
   @Autowired private CustomerRepository customerRepository;
   @Autowired private StripeEventRepository stripeEventRepository;
+  @Autowired private TransactionTemplate transactionTemplate;
 
   @MockitoBean private StripePaymentProvider stripePaymentProvider;
   @MockitoBean private MailSender mailSender;
@@ -80,7 +83,7 @@ class OrderConfirmationMailIntegrationTest {
     productRepository.deleteAll();
 
     AtomicInteger customerCounter = new AtomicInteger();
-    when(stripePaymentProvider.createCustomer(any()))
+    when(stripePaymentProvider.createCustomer(any(), any()))
         .thenAnswer(_ -> "cus_fake_" + customerCounter.incrementAndGet());
     when(stripePaymentProvider.createCheckoutSession(any(), any()))
         .thenAnswer(inv -> {
@@ -136,6 +139,8 @@ class OrderConfirmationMailIntegrationTest {
     assertThat(orderVar).isInstanceOf(OrderConfirmationView.class);
     OrderConfirmationView view = (OrderConfirmationView) orderVar;
     assertThat(view.number()).isEqualTo(orderNumber);
+    assertThat(view.subtotal()).isEqualByComparingTo("29.80");
+    assertThat(view.totalDiscount()).isEqualByComparingTo("2.98");
     assertThat(view.total()).isEqualByComparingTo("26.82"); // 14.90 * 2 * (1 - 0.10)
     assertThat(view.items()).hasSize(1);
     OrderConfirmationView.Item item = view.items().getFirst();
@@ -164,8 +169,23 @@ class OrderConfirmationMailIntegrationTest {
   }
 
   private void stubCheckoutSucceeded(String eventId, String sessionId, String paymentIntentId) {
+    BigDecimal checkoutTotal = Objects.requireNonNull(transactionTemplate.execute(_ -> {
+      Order order = orderRepository.findByStripeCheckoutSessionId(sessionId).orElseThrow();
+      return order.getOrderItems().stream()
+          .map(item -> item.getPriceAtPurchase().multiply(BigDecimal.valueOf(item.getQuantity())))
+          .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }));
     when(stripePaymentProvider.verifyAndParse(any(), eq("valid")))
         .thenReturn(Optional.of(new StripeWebhookEvent.CheckoutSucceeded(eventId, sessionId, paymentIntentId)));
+    when(stripePaymentProvider.retrieveCompletedCheckoutSession(sessionId))
+        .thenReturn(new StripeCompletedCheckoutSession(
+            sessionId,
+            paymentIntentId,
+            checkoutTotal,
+            checkoutTotal,
+            null,
+            BigDecimal.ZERO.setScale(2)
+        ));
   }
 
   private Product product(String name, String description, BigDecimal price, int discount, long amount) {
