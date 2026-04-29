@@ -1,0 +1,8 @@
+databaseChangeLog:
+  - changeSet:
+      id: 202604241100-1
+      author: Codex
+      changes:
+        - dropUniqueConstraint:
+            tableName: coupon
+            constraintName: uk_coupon_stripe_coupon_id

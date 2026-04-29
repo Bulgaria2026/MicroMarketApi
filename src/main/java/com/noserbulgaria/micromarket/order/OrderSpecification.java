@@ -19,6 +19,7 @@ public class OrderSpecification {
     return Specification.allOf(
         greaterThanOrEqualTo(ExtendedEntity_.createdAt, filter.fromDate()),
         lessThanOrEqualTo(ExtendedEntity_.createdAt, filter.toDate()),
+        customerIdEquals(filter.customerId()),
         containsIgnoreCase(Order_.orderNumber, filter.orderNumber()),
         containsIgnoreCase(Order_.email, filter.email()),
         equalTo(Order_.status, filter.status())

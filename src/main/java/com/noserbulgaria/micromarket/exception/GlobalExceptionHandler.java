@@ -1,5 +1,8 @@
 package com.noserbulgaria.micromarket.exception;
 
+import com.stripe.exception.ApiConnectionException;
+import com.stripe.exception.InvalidRequestException;
+import com.stripe.exception.RateLimitException;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.TypeMismatchException;
@@ -42,6 +45,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(ConflictApiException.class)
   public ProblemDetail handleConflict(ConflictApiException ex, WebRequest request) {
     return buildProblem(HttpStatus.CONFLICT, "Conflict", ex.getMessage(), request);
+  }
+
+  // List of available StripeExceptions: https://docs.stripe.com/error-handling?lang=java#error-types
+  @ExceptionHandler(StripeApiException.class)
+  public ProblemDetail handleStripeException(StripeApiException ex, WebRequest request) {
+    return switch (ex.getCause()) {
+      case RateLimitException _ ->
+          buildProblem(HttpStatus.TOO_MANY_REQUESTS, "Too Many Requests", ex.getMessage(), request);
+      case ApiConnectionException _ ->
+          buildProblem(HttpStatus.SERVICE_UNAVAILABLE, "Service Unavailable", ex.getMessage(), request);
+      case InvalidRequestException _ when ex.invalidRequestMeansNotFound() ->
+          buildProblem(HttpStatus.NOT_FOUND, "Not Found", ex.getMessage(), request);
+      case null, default ->
+          buildProblem(HttpStatus.BAD_GATEWAY, "Bad Gateway", ex.getMessage(), request);
+    };
   }
 
   @ExceptionHandler(UnauthorizedApiException.class)

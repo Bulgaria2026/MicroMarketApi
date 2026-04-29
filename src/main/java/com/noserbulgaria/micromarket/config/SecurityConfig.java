@@ -56,7 +56,8 @@ public class SecurityConfig {
       "/product",
       "/product/{id}",
       "/product/{id}/history",
-      "/checkout/sessions/{sessionId}/status"
+      "/checkout/sessions/{sessionId}/status",
+      "/coupon-offer/catalog"
   };
 
   private static final String[] PUBLIC_POST_ENDPOINTS = {

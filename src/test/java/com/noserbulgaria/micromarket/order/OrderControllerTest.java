@@ -88,7 +88,7 @@ class OrderControllerTest {
         .status(OrderStatusType.PENDING_PAYMENT)
         .customer(testProfile)
         .email("admin@test.local")
-        .totalAmount(new BigDecimal("21.00"))
+        .subtotal(new BigDecimal("21.00"))
         .build();
 
     OrderItem item = OrderItem.builder()
@@ -119,13 +119,14 @@ class OrderControllerTest {
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getOrdersAsAdministrator_returnsOk() throws Exception {
-    mockMvc.perform(get("/order"))
+    mockMvc.perform(get("/order").param("customerId", testProfile.getId().toString()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()))
         .andExpect(jsonPath("$.content[0].orderNumber").value("MM-T00001"))
         .andExpect(jsonPath("$.content[0].customerId").value(testProfile.getId().toString()))
         .andExpect(jsonPath("$.content[0].email").value("admin@test.local"))
-        .andExpect(jsonPath("$.content[0].totalAmount").value(21.00))
+        .andExpect(jsonPath("$.content[0].subtotal").value(21.00))
+        .andExpect(jsonPath("$.content[0].paidTotal").doesNotExist())
         .andExpect(jsonPath("$.content[0].orderItems").isArray())
         .andExpect(jsonPath("$.content[0].orderItems.length()").value(1))
         .andExpect(jsonPath("$.content[0].orderItems[0].productId").value(testProduct.getId().toString()))
@@ -143,7 +144,7 @@ class OrderControllerTest {
         .status(OrderStatusType.PAID)
         .customer(testProfile)
         .email("other@test.local")
-        .totalAmount(new BigDecimal("5.00"))
+        .subtotal(new BigDecimal("5.00"))
         .build();
     orderRepository.saveAndFlush(other);
 
@@ -161,7 +162,7 @@ class OrderControllerTest {
         .status(OrderStatusType.PAID)
         .customer(testProfile)
         .email("someone@elsewhere.com")
-        .totalAmount(new BigDecimal("5.00"))
+        .subtotal(new BigDecimal("5.00"))
         .build();
     orderRepository.saveAndFlush(other);
 
@@ -180,7 +181,8 @@ class OrderControllerTest {
         .andExpect(jsonPath("$.orderNumber").value("MM-T00001"))
         .andExpect(jsonPath("$.customerId").value(testProfile.getId().toString()))
         .andExpect(jsonPath("$.email").value("admin@test.local"))
-        .andExpect(jsonPath("$.totalAmount").value(21.00))
+        .andExpect(jsonPath("$.subtotal").value(21.00))
+        .andExpect(jsonPath("$.paidTotal").doesNotExist())
         .andExpect(jsonPath("$.orderItems").isArray())
         .andExpect(jsonPath("$.orderItems.length()").value(1))
         .andExpect(jsonPath("$.orderItems[0].productId").value(testProduct.getId().toString()))
@@ -198,11 +200,12 @@ class OrderControllerTest {
         .status(OrderStatusType.PAID)
         .customer(testProfile)
         .email("admin@test.local")
-        .totalAmount(new BigDecimal("10.50"))
+        .subtotal(new BigDecimal("10.50"))
         .build();
     orderRepository.saveAndFlush(filteredOut);
 
     mockMvc.perform(get("/order")
+            .param("customerId", testProfile.getId().toString())
             .param("status", OrderStatusType.PENDING_PAYMENT.name()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
@@ -238,7 +241,7 @@ class OrderControllerTest {
         .andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()))
         .andExpect(jsonPath("$.content[0].orderNumber").value("MM-T00001"))
         .andExpect(jsonPath("$.content[0].customerId").value(testProfile.getId().toString()))
-        .andExpect(jsonPath("$.content[0].totalAmount").value(21.00))
+        .andExpect(jsonPath("$.content[0].subtotal").value(21.00))
         .andExpect(jsonPath("$.content[0].orderItems.length()").value(1))
         .andExpect(jsonPath("$.content[0].orderItems[0].productId").value(testProduct.getId().toString()))
         .andExpect(jsonPath("$.content[0].orderItems[0].productName").value("Cola"))

@@ -28,7 +28,7 @@ class OrderConfirmationViewMapperTest {
         .originalUnitPrice(new BigDecimal("14.90"))
         .priceAtPurchase(new BigDecimal("14.90"))
         .build();
-    Order order = order("ORD-100001", new BigDecimal("29.80"), Set.of(line));
+    Order order = order("ORD-100001", new BigDecimal("29.80"), new BigDecimal("29.80"), Set.of(line));
 
     OrderConfirmationView view = mapper.toView(order);
 
@@ -47,7 +47,7 @@ class OrderConfirmationViewMapperTest {
   }
 
   @Test
-  void computesDiscountPercentAndAbsoluteDiscount() {
+  void computesDiscountPercentAndUsesOrderSubtotal() {
     Product product = product("Coffee Beans 1kg", "Single-origin Ethiopia");
     OrderItem line = OrderItem.builder()
         .product(product)
@@ -56,15 +56,15 @@ class OrderConfirmationViewMapperTest {
         .originalUnitPrice(new BigDecimal("100.00"))
         .priceAtPurchase(new BigDecimal("90.00"))
         .build();
-    Order order = order("ORD-100002", new BigDecimal("180.00"), Set.of(line));
+    Order order = order("ORD-100002", new BigDecimal("180.00"), new BigDecimal("180.00"), Set.of(line));
 
     OrderConfirmationView view = mapper.toView(order);
 
     OrderConfirmationView.Item item = view.items().getFirst();
     assertThat(item.discount()).isEqualTo(10);
     assertThat(item.lineTotal()).isEqualByComparingTo("180.00");
-    assertThat(view.subtotal()).isEqualByComparingTo("200.00");
-    assertThat(view.totalDiscount()).isEqualByComparingTo("20.00");
+    assertThat(view.subtotal()).isEqualByComparingTo("180.00");
+    assertThat(view.totalDiscount()).isEqualByComparingTo("0.00");
     assertThat(view.total()).isEqualByComparingTo("180.00");
   }
 
@@ -80,7 +80,7 @@ class OrderConfirmationViewMapperTest {
         .originalUnitPrice(new BigDecimal("20.00"))
         .priceAtPurchase(new BigDecimal("15.00"))
         .build();
-    Order order = order("ORD-100003", new BigDecimal("45.00"), orderedSet(lineA, lineB));
+    Order order = order("ORD-100003", new BigDecimal("45.00"), new BigDecimal("45.00"), orderedSet(lineA, lineB));
 
     OrderConfirmationView view = mapper.toView(order);
 
@@ -88,9 +88,25 @@ class OrderConfirmationViewMapperTest {
     assertThat(view.items()).extracting(OrderConfirmationView.Item::lineTotal)
         .usingElementComparator(BigDecimal::compareTo)
         .containsExactly(new BigDecimal("30.00"), new BigDecimal("15.00"));
-    assertThat(view.subtotal()).isEqualByComparingTo("50.00");
-    assertThat(view.totalDiscount()).isEqualByComparingTo("5.00");
+    assertThat(view.subtotal()).isEqualByComparingTo("45.00");
+    assertThat(view.totalDiscount()).isEqualByComparingTo("0.00");
     assertThat(view.total()).isEqualByComparingTo("45.00");
+  }
+
+  @Test
+  void usesPaidTotalForOrderSummaryAfterCheckoutDiscounts() {
+    OrderItem line = OrderItem.builder()
+        .product(product("Gift Box", "seasonal selection")).productName("Gift Box").quantity(1)
+        .originalUnitPrice(new BigDecimal("50.00"))
+        .priceAtPurchase(new BigDecimal("50.00"))
+        .build();
+    Order order = order("ORD-100004", new BigDecimal("50.00"), new BigDecimal("42.50"), Set.of(line));
+
+    OrderConfirmationView view = mapper.toView(order);
+
+    assertThat(view.subtotal()).isEqualByComparingTo("50.00");
+    assertThat(view.totalDiscount()).isEqualByComparingTo("7.50");
+    assertThat(view.total()).isEqualByComparingTo("42.50");
   }
 
   @Test
@@ -100,7 +116,7 @@ class OrderConfirmationViewMapperTest {
         .originalUnitPrice(new BigDecimal("9.90"))
         .priceAtPurchase(new BigDecimal("8.90"))
         .build();
-    Order order = order("ORD-100004", new BigDecimal("8.90"), Set.of(line));
+    Order order = order("ORD-100005", new BigDecimal("8.90"), new BigDecimal("8.90"), Set.of(line));
 
     OrderConfirmationView view = mapper.toView(order);
 
@@ -119,7 +135,7 @@ class OrderConfirmationViewMapperTest {
     return product;
   }
 
-  private static Order order(String number, BigDecimal total, Set<OrderItem> items) {
+  private static Order order(String number, BigDecimal subtotal, BigDecimal paidTotal, Set<OrderItem> items) {
     Guest customer = new Guest();
     customer.setEmail("buyer@example.com");
     Order order = Order.builder()
@@ -127,7 +143,8 @@ class OrderConfirmationViewMapperTest {
         .status(OrderStatusType.PAID)
         .customer(customer)
         .email("buyer@example.com")
-        .totalAmount(total)
+        .subtotal(subtotal)
+        .paidTotal(paidTotal)
         .orderItems(new LinkedHashSet<>(items))
         .build();
     order.setCreatedAt(Instant.parse("2026-04-23T10:15:30Z"));

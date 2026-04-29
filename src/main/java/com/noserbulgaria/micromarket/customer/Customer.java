@@ -8,6 +8,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Inheritance;
 import jakarta.persistence.InheritanceType;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.Version;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
@@ -35,4 +36,7 @@ public abstract class Customer extends ExtendedEntity {
   @ToString.Exclude
   @OneToMany(mappedBy = "customer")
   private Set<Order> orders = new HashSet<>();
+
+  @Version
+  private long version;
 }
