@@ -75,7 +75,9 @@ public class CouponService {
 
   public CouponResponse patchOrThrow(UUID id, CouponPatchRequest request) {
     Coupon coupon = couponTransactions.patchCoupon(id, request);
-    stripePaymentProvider.deleteCoupon(coupon.getStripeCouponId());
+    if (!coupon.isActive()) {
+      stripePaymentProvider.deleteCoupon(coupon.getStripeCouponId());
+    }
 
     return couponMapper.toDto(coupon);
   }
