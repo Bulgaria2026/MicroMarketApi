@@ -57,6 +57,36 @@ public class CouponTransactions {
     return couponMapper.toDto(couponRepository.saveAndFlush(coupon));
   }
 
+  @Transactional
+  protected Coupon patchCoupon(UUID id, CouponPatchRequest request){
+    Coupon coupon = couponRepository.findById(id)
+        .orElseThrow(() -> new NotFoundApiException("Coupon with id '%s' not found".formatted(id)));
+    if (coupon.getCouponOffer() != null) {
+      throw new BadRequestApiException("Purchased coupons cannot be updated manually");
+    }
+    if (!request.unsupportedFields().isEmpty()) {
+      throw new BadRequestApiException(
+          "Unsupported coupon patch field(s): %s".formatted(String.join(", ", request.unsupportedFields())));
+    }
+    if (request.isEmpty()) {
+      throw new BadRequestApiException("Patch must include name or active");
+    }
+
+    if (request.getName() != null) {
+      coupon.setName(normalizeName(request.getName()));
+    }
+
+    Boolean active = request.getActive();
+    if (active != null && active != coupon.isActive()) {
+      if (active) {
+        throw new BadRequestApiException("Inactive coupons cannot be reactivated");
+      }
+      coupon.setActive(false);
+    }
+
+    return couponRepository.saveAndFlush(coupon);
+  }
+
   private void applyLocalState(Coupon coupon, ResolvedCouponInput input) {
     coupon.setCouponOffer(null);
     coupon.setUser(input.userId() == null ? null : userRepository.getReferenceById(input.userId()));

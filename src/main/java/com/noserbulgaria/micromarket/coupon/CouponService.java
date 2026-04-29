@@ -73,35 +73,11 @@ public class CouponService {
     }
   }
 
-  @Transactional
   public CouponResponse patchOrThrow(UUID id, CouponPatchRequest request) {
-    Coupon coupon = couponRepository.findById(id)
-        .orElseThrow(() -> new NotFoundApiException("Coupon with id '%s' not found".formatted(id)));
-    if (coupon.getCouponOffer() != null) {
-      throw new BadRequestApiException("Purchased coupons cannot be updated manually");
-    }
-    if (!request.unsupportedFields().isEmpty()) {
-      throw new BadRequestApiException(
-          "Unsupported coupon patch field(s): %s".formatted(String.join(", ", request.unsupportedFields())));
-    }
-    if (request.isEmpty()) {
-      throw new BadRequestApiException("Patch must include name or active");
-    }
+    Coupon coupon = couponTransactions.patchCoupon(id, request);
+    stripePaymentProvider.deleteCoupon(coupon.getStripeCouponId());
 
-    if (request.getName() != null) {
-      coupon.setName(normalizeName(request.getName()));
-    }
-
-    Boolean active = request.getActive();
-    if (active != null && active != coupon.isActive()) {
-      if (active) {
-        throw new BadRequestApiException("Inactive coupons cannot be reactivated");
-      }
-      stripePaymentProvider.deleteCoupon(coupon.getStripeCouponId());
-      coupon.setActive(false);
-    }
-
-    return couponMapper.toDto(couponRepository.saveAndFlush(coupon));
+    return couponMapper.toDto(coupon);
   }
 
   public Optional<Coupon> findByStripePromotionCodeIdSynced(String stripePromotionCodeId) {
