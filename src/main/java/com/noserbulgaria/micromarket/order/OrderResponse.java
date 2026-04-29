@@ -22,6 +22,10 @@ public record OrderResponse(
 
     BigDecimal subtotal,
 
+    @Nullable String couponCode,
+
+    @Nullable BigDecimal couponAmountOff,
+
     @Nullable BigDecimal paidTotal,
 
     Set<OrderItemResponse> orderItems,
