@@ -293,6 +293,32 @@ class StripePaymentProviderTest {
   }
 
   @Test
+  void deleteCoupon_resourceMissingIsSwallowedAsIdempotentSuccess() throws Exception {
+    when(stripeClient.v1()).thenReturn(v1Services);
+    when(v1Services.coupons()).thenReturn(couponService);
+    when(couponService.delete("coupon_already_gone"))
+        .thenThrow(new InvalidRequestException(
+            "No such coupon", "id", "req_123", "resource_missing", 404, null));
+
+    provider.deleteCoupon("coupon_already_gone");
+
+    verify(couponService).delete("coupon_already_gone");
+  }
+
+  @Test
+  void deleteCoupon_otherInvalidRequestStillThrows() throws Exception {
+    when(stripeClient.v1()).thenReturn(v1Services);
+    when(v1Services.coupons()).thenReturn(couponService);
+    when(couponService.delete("coupon_bad_id"))
+        .thenThrow(new InvalidRequestException(
+            "Bad id", "id", "req_123", "parameter_invalid", 400, null));
+
+    assertThatThrownBy(() -> provider.deleteCoupon("coupon_bad_id"))
+        .isInstanceOf(StripeApiException.class)
+        .hasMessage("Failed to delete Stripe coupon coupon_bad_id");
+  }
+
+  @Test
   void deleteCoupon_rateLimitMapsToTooManyRequests() throws Exception {
     when(stripeClient.v1()).thenReturn(v1Services);
     when(v1Services.coupons()).thenReturn(couponService);

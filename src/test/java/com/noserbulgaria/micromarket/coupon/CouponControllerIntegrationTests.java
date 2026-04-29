@@ -259,6 +259,52 @@ class CouponControllerIntegrationTests {
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void patchCoupon_nameOnly_onAlreadyInactiveCoupon_doesNotTouchStripe() throws Exception {
+    Coupon coupon = coupon("RENAME-INACTIVE", null, "coupon_old", "promo_old");
+    coupon.setActive(false);
+    couponRepository.saveAndFlush(coupon);
+
+    mockMvc.perform(patch("/coupon/{id}", coupon.getId())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "name": "Renamed while inactive"
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.name").value("Renamed while inactive"))
+        .andExpect(jsonPath("$.active").value(false));
+
+    Coupon updated = couponRepository.findById(coupon.getId()).orElseThrow();
+    assertThat(updated.getName()).isEqualTo("Renamed while inactive");
+    assertThat(updated.isActive()).isFalse();
+    verify(stripePaymentProvider, never()).deleteCoupon(any());
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void patchCoupon_activeFalse_isIdempotentOnAlreadyInactiveCoupon() throws Exception {
+    Coupon coupon = coupon("RETIRE-AGAIN", null, "coupon_gone", "promo_gone");
+    coupon.setActive(false);
+    couponRepository.saveAndFlush(coupon);
+
+    mockMvc.perform(patch("/coupon/{id}", coupon.getId())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {
+                  "active": false
+                }
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.active").value(false));
+
+    Coupon updated = couponRepository.findById(coupon.getId()).orElseThrow();
+    assertThat(updated.isActive()).isFalse();
+    verify(stripePaymentProvider).deleteCoupon("coupon_gone");
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void patchCoupon_activeTrueForInactiveCoupon_returnsBadRequest() throws Exception {
     Coupon coupon = coupon("REACTIVATE-ME", null, "coupon_old", "promo_old");
     coupon.setActive(false);

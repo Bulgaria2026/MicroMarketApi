@@ -5,6 +5,7 @@ import com.noserbulgaria.micromarket.exception.StripeApiException;
 import com.noserbulgaria.micromarket.order.Order;
 import com.noserbulgaria.micromarket.order.OrderItem;
 import com.stripe.StripeClient;
+import com.stripe.exception.InvalidRequestException;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Charge;
@@ -171,11 +172,18 @@ public class StripePaymentProvider {
     }
   }
 
+  /** Idempotent: a missing coupon means a previous delete already won, which is the success outcome. */
   public void deleteCoupon(String stripeCouponId) {
     try {
       stripeClient.v1().coupons().delete(stripeCouponId);
+    } catch (InvalidRequestException ex) {
+      if ("resource_missing".equals(ex.getCode())) {
+        log.debug("Stripe coupon {} already deleted; treating as success", stripeCouponId);
+        return;
+      }
+      throw new StripeApiException("Failed to delete Stripe coupon %s".formatted(stripeCouponId), ex);
     } catch (StripeException ex) {
-      throw new StripeApiException("Failed to delete Stripe coupon %s".formatted(stripeCouponId), ex, true);
+      throw new StripeApiException("Failed to delete Stripe coupon %s".formatted(stripeCouponId), ex);
     }
   }
 

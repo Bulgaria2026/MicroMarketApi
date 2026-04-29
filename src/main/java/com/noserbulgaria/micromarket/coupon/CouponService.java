@@ -1,7 +1,6 @@
 package com.noserbulgaria.micromarket.coupon;
 
 import com.noserbulgaria.micromarket.customer.StripeCustomerService;
-import com.noserbulgaria.micromarket.exception.BadRequestApiException;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
 import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCoupon;
 import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCouponRequest;
@@ -16,8 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.Optional;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -75,7 +74,7 @@ public class CouponService {
 
   public CouponResponse patchOrThrow(UUID id, CouponPatchRequest request) {
     Coupon coupon = couponTransactions.patchCoupon(id, request);
-    if (!coupon.isActive()) {
+    if (Boolean.FALSE.equals(request.getActive())) {
       stripePaymentProvider.deleteCoupon(coupon.getStripeCouponId());
     }
 
