@@ -1,16 +1,15 @@
 package com.noserbulgaria.micromarket.couponoffer;
 
 import com.noserbulgaria.micromarket.auth.user.CustomUserDetails;
-import com.noserbulgaria.micromarket.auth.user.User;
-import com.noserbulgaria.micromarket.auth.user.UserRepository;
 import com.noserbulgaria.micromarket.coupon.CouponResponse;
-import com.noserbulgaria.micromarket.coupon.CouponService;
-import com.noserbulgaria.micromarket.customer.PointChangeReason;
-import com.noserbulgaria.micromarket.customer.Profile;
-import com.noserbulgaria.micromarket.customer.ProfileRepository;
+import com.noserbulgaria.micromarket.customer.StripeCustomerService;
 import com.noserbulgaria.micromarket.exception.BadRequestApiException;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
+import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCoupon;
+import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCouponRequest;
+import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,16 +24,16 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class CouponOfferService {
 
   private final CouponOfferRepository couponOfferRepository;
   private final CouponOfferMapper couponOfferMapper;
-  private final CouponService couponService;
-  private final UserRepository userRepository;
-  private final ProfileRepository profileRepository;
+  private final CouponOfferPurchaseTransactions purchaseTransactions;
+  private final StripeCustomerService stripeCustomerService;
+  private final StripePaymentProvider stripePaymentProvider;
 
   @Transactional(readOnly = true)
   public Page<CouponOfferResponse> findAll(Specification<CouponOffer> spec, Pageable pageable) {
@@ -60,6 +59,7 @@ public class CouponOfferService {
         .toList();
   }
 
+  @Transactional
   public CouponOfferResponse create(CouponOfferRequest request) {
     validateDates(request.startDate(), request.expiryDate());
 
@@ -68,6 +68,7 @@ public class CouponOfferService {
     return couponOfferMapper.toDto(couponOfferRepository.saveAndFlush(couponOffer));
   }
 
+  @Transactional
   public CouponOfferResponse updateOrThrow(UUID id, CouponOfferRequest request) {
     CouponOffer couponOffer = couponOfferRepository.findById(id)
         .orElseThrow(() -> new NotFoundApiException("Coupon offer with id '%s' not found".formatted(id)));
@@ -82,28 +83,33 @@ public class CouponOfferService {
   }
 
   public CouponResponse purchase(UUID id, CustomUserDetails userDetails) {
-    CouponOffer couponOffer = couponOfferRepository.findById(id)
-        .orElseThrow(() -> new NotFoundApiException("Coupon offer with id '%s' not found".formatted(id)));
-    validatePurchasable(couponOffer, Instant.now());
-
-    User user = userRepository.findById(userDetails.getId())
-        .orElseThrow(() -> new NotFoundApiException("User with id '%s' not found".formatted(userDetails.getId())));
-
-    Profile profile = ensureProfile(user);
-    if (couponOffer.getPointCost() > 0) {
-      int updated = profileRepository.trySpendPoints(user.getId(), couponOffer.getPointCost(), PointChangeReason.COUPON_PURCHASED);
-      if (updated != 1) {
-        throw new BadRequestApiException("Insufficient points to purchase coupon offer");
+    CouponOfferPurchaseReservation reservation = purchaseTransactions.reserve(id, userDetails.getId());
+    StripeManagedCoupon stripeCoupon = null;
+    try {
+      String stripeCustomerId = stripeCustomerService.ensureStripeCustomer(
+          reservation.stripeCustomerOwnerId(), reservation.stripeCustomerEmail());
+      stripeCoupon = stripePaymentProvider.createManagedCoupon(toManagedCouponRequest(reservation, stripeCustomerId));
+      return purchaseTransactions.persistPurchasedCoupon(reservation, stripeCoupon);
+    } catch (RuntimeException ex) {
+      if (stripeCoupon != null) {
+        deleteStripeCouponAfterFailedPurchase(stripeCoupon.stripeCouponId(), ex);
       }
+      compensateReservation(reservation, ex);
+      throw ex;
     }
+  }
 
-    CouponResponse issuedCoupon = couponService.issuePurchasedCoupon(couponOffer, user);
-    couponOffer.setPurchaseCount(couponOffer.getPurchaseCount() + 1);
-    if (couponOffer.getMaxPurchases() != null && couponOffer.getPurchaseCount() >= couponOffer.getMaxPurchases()) {
-      couponOffer.setActive(false);
-    }
-    couponOfferRepository.saveAndFlush(couponOffer);
-    return issuedCoupon;
+  private StripeManagedCouponRequest toManagedCouponRequest(
+      CouponOfferPurchaseReservation reservation, String stripeCustomerId) {
+    return new StripeManagedCouponRequest(
+        amountOffInMinorUnits(reservation.amountOff()),
+        reservation.code(),
+        reservation.name(),
+        true,
+        reservation.expiryDate(),
+        1,
+        stripeCustomerId
+    );
   }
 
   private void applyLocalState(CouponOffer couponOffer, CouponOfferRequest request) {
@@ -117,35 +123,10 @@ public class CouponOfferService {
     couponOffer.setActive(request.active() == null || request.active());
   }
 
-  private void validatePurchasable(CouponOffer couponOffer, Instant now) {
-    if (!couponOffer.isActive()) {
-      throw new BadRequestApiException("Coupon offer is inactive");
-    }
-    if (couponOffer.getStartDate() != null && couponOffer.getStartDate().isAfter(now)) {
-      throw new BadRequestApiException("Coupon offer is not yet available");
-    }
-    if (couponOffer.getExpiryDate() != null && !couponOffer.getExpiryDate().isAfter(now)) {
-      throw new BadRequestApiException("Coupon offer has expired");
-    }
-    if (couponOffer.getMaxPurchases() != null && couponOffer.getPurchaseCount() >= couponOffer.getMaxPurchases()) {
-      throw new BadRequestApiException("Coupon offer has reached its purchase limit");
-    }
-  }
-
   private void validateDates(@Nullable Instant startDate, @Nullable Instant expiryDate) {
     if (startDate != null && expiryDate != null && !expiryDate.isAfter(startDate)) {
       throw new BadRequestApiException("expiryDate must be after startDate");
     }
-  }
-
-  private Profile ensureProfile(User user) {
-    return profileRepository.findByUserId(user.getId())
-        .orElseGet(() -> {
-          Profile profile = new Profile();
-          profile.setUser(user);
-          profile.setPoints(0);
-          return profileRepository.saveAndFlush(profile);
-        });
   }
 
   private String normalizeName(String name) {
@@ -169,6 +150,30 @@ public class CouponOfferService {
       return amountOff.setScale(2, RoundingMode.UNNECESSARY);
     } catch (ArithmeticException ex) {
       throw new BadRequestApiException("amountOff must have at most 2 decimal places");
+    }
+  }
+
+  private long amountOffInMinorUnits(BigDecimal amountOff) {
+    return amountOff.movePointRight(2).longValueExact();
+  }
+
+  private void deleteStripeCouponAfterFailedPurchase(String stripeCouponId, RuntimeException original) {
+    try {
+      stripePaymentProvider.deleteCoupon(stripeCouponId);
+    } catch (RuntimeException cleanupEx) {
+      log.error("Failed to clean up Stripe coupon {} after coupon offer purchase failure", stripeCouponId, cleanupEx);
+      original.addSuppressed(cleanupEx);
+    }
+  }
+
+  private void compensateReservation(CouponOfferPurchaseReservation reservation, RuntimeException original) {
+    try {
+      purchaseTransactions.compensate(reservation);
+    } catch (RuntimeException compensationEx) {
+      log.error(
+          "Failed to compensate coupon offer reservation for offer {} and user {}",
+          reservation.couponOfferId(), reservation.userId(), compensationEx);
+      original.addSuppressed(compensationEx);
     }
   }
 }

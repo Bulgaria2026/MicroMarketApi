@@ -60,11 +60,22 @@ public class StripePaymentProvider {
   private final StripeProperties properties;
 
   public String createCustomer(String email) {
+    return createCustomer(email, null);
+  }
+
+  public String createCustomer(String email, @Nullable String idempotencyKey) {
     CustomerCreateParams params = CustomerCreateParams.builder()
         .setEmail(email)
         .build();
+    RequestOptions options = idempotencyKey == null
+        ? null
+        : RequestOptions.builder()
+        .setIdempotencyKey(idempotencyKey)
+        .build();
     try {
-      return stripeClient.v1().customers().create(params).getId();
+      return options == null
+          ? stripeClient.v1().customers().create(params).getId()
+          : stripeClient.v1().customers().create(params, options).getId();
     } catch (StripeException ex) {
       throw new StripeApiException("Failed to create Stripe customer", ex);
     }
@@ -144,10 +155,6 @@ public class StripePaymentProvider {
     } catch (StripeException ex) {
       throw new StripeApiException("Failed to update Stripe promotion code %s".formatted(stripePromotionCodeId), ex);
     }
-  }
-
-  public void deactivatePromotionCode(String stripePromotionCodeId) {
-    updatePromotionCodeActive(stripePromotionCodeId, false);
   }
 
   public StripeManagedCoupon retrievePromotionCode(String stripePromotionCodeId) {

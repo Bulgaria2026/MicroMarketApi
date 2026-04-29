@@ -24,7 +24,6 @@ import org.springframework.security.test.context.support.WithUserDetails;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Objects;
@@ -34,6 +33,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -46,7 +47,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Transactional
 class CouponControllerIntegrationTests {
 
   private static final String ADMIN_EMAIL = "admin@micromarket.dev";
@@ -152,8 +152,10 @@ class CouponControllerIntegrationTests {
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void createCoupon_forUserWithoutProfile_createsStripeCustomerEagerly() throws Exception {
-    User user = createUser("coupon-target@micromarket.dev", false, null);
-    when(stripePaymentProvider.createCustomer("coupon-target@micromarket.dev")).thenReturn("cus_generated");
+    String targetEmail = "coupon-target-" + UUID.randomUUID() + "@micromarket.dev";
+    User user = createUser(targetEmail, false, null);
+    when(stripePaymentProvider.createCustomer(eq(targetEmail), anyString()))
+        .thenReturn("cus_generated");
 
     mockMvc.perform(post("/coupon")
             .contentType(MediaType.APPLICATION_JSON)
@@ -171,6 +173,7 @@ class CouponControllerIntegrationTests {
 
     Profile profile = profileRepository.findByUserId(user.getId()).orElseThrow();
     assertThat(profile.getStripeCustomerId()).isEqualTo("cus_generated");
+    verify(stripePaymentProvider).createCustomer(targetEmail, profile.getId().toString());
 
     ArgumentCaptor<StripeManagedCouponRequest> captor = ArgumentCaptor.forClass(StripeManagedCouponRequest.class);
     verify(stripePaymentProvider).createManagedCoupon(captor.capture());

@@ -116,7 +116,7 @@ class OrderPlacementIntegrationTests {
     userRepository.deleteAll();
 
     AtomicInteger customerCounter = new AtomicInteger();
-    when(stripePaymentProvider.createCustomer(any()))
+    when(stripePaymentProvider.createCustomer(any(), any()))
         .thenAnswer(inv -> "cus_fake_" + customerCounter.incrementAndGet());
     when(stripePaymentProvider.createCheckoutSession(any(), any()))
         .thenAnswer(inv -> {
@@ -208,7 +208,7 @@ class OrderPlacementIntegrationTests {
     Customer reloaded = customerRepository.findById(guest.getId()).orElseThrow();
     assertThat(reloaded.getStripeCustomerId()).isNotNull();
 
-    verify(stripePaymentProvider, times(1)).createCustomer("stripe-reuse@example.com");
+    verify(stripePaymentProvider, times(1)).createCustomer(eq("stripe-reuse@example.com"), any());
     ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
     verify(stripePaymentProvider, times(2)).createCheckoutSession(any(), captor.capture());
     assertThat(captor.getAllValues())

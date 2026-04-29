@@ -8,6 +8,7 @@ import com.stripe.exception.InvalidRequestException;
 import com.stripe.exception.RateLimitException;
 import com.stripe.model.Charge;
 import com.stripe.model.Coupon;
+import com.stripe.model.Customer;
 import com.stripe.model.Event;
 import com.stripe.model.EventDataObjectDeserializer;
 import com.stripe.model.PromotionCode;
@@ -15,6 +16,7 @@ import com.stripe.model.Refund;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.RequestOptions;
 import com.stripe.param.CouponCreateParams;
+import com.stripe.param.CustomerCreateParams;
 import com.stripe.param.PromotionCodeCreateParams;
 import com.stripe.param.PromotionCodeUpdateParams;
 import com.stripe.param.checkout.SessionCreateParams;
@@ -49,6 +51,7 @@ class StripePaymentProviderTest {
   @Mock private CheckoutService checkoutService;
   @Mock private SessionService sessionService;
   @Mock private CouponService couponService;
+  @Mock private com.stripe.service.CustomerService customerService;
   @Mock private PromotionCodeService promotionCodeService;
 
   private final StripeProperties properties = new StripeProperties(
@@ -93,6 +96,25 @@ class StripePaymentProviderTest {
     assertThat(params.getPaymentIntentData().getMetadata())
         .as("order_number must be on the PaymentIntent metadata (visible on Payments in the dashboard)")
         .containsEntry("order_number", "MM-123456");
+  }
+
+  @Test
+  void createCustomer_withIdempotencyKeySendsRequestOptions() throws Exception {
+    Customer customer = new Customer();
+    customer.setId("cus_123");
+
+    when(stripeClient.v1()).thenReturn(v1Services);
+    when(v1Services.customers()).thenReturn(customerService);
+    when(customerService.create(any(CustomerCreateParams.class), any(RequestOptions.class))).thenReturn(customer);
+
+    String result = provider.createCustomer("customer@example.com", "customer-idempotency-key");
+
+    assertThat(result).isEqualTo("cus_123");
+    ArgumentCaptor<CustomerCreateParams> paramsCaptor = ArgumentCaptor.forClass(CustomerCreateParams.class);
+    ArgumentCaptor<RequestOptions> optionsCaptor = ArgumentCaptor.forClass(RequestOptions.class);
+    verify(customerService).create(paramsCaptor.capture(), optionsCaptor.capture());
+    assertThat(paramsCaptor.getValue().getEmail()).isEqualTo("customer@example.com");
+    assertThat(optionsCaptor.getValue().getIdempotencyKey()).isEqualTo("customer-idempotency-key");
   }
 
   @Test

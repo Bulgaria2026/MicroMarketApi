@@ -9,6 +9,7 @@ import com.noserbulgaria.micromarket.coupon.CouponRepository;
 import com.noserbulgaria.micromarket.customer.PointChangeReason;
 import com.noserbulgaria.micromarket.customer.Profile;
 import com.noserbulgaria.micromarket.customer.ProfileRepository;
+import com.noserbulgaria.micromarket.exception.BadRequestApiException;
 import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCoupon;
 import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCouponRequest;
 import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
@@ -26,14 +27,20 @@ import org.springframework.security.test.context.support.WithUserDetails;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -45,7 +52,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Transactional
 class CouponOfferControllerIntegrationTests {
 
   private static final String ADMIN_EMAIL = "admin@micromarket.dev";
@@ -66,11 +72,14 @@ class CouponOfferControllerIntegrationTests {
   private PasswordEncoder passwordEncoder;
   @Autowired
   private EntityManager entityManager;
+  @Autowired
+  private CouponOfferPurchaseTransactions purchaseTransactions;
 
   @MockitoBean
   private StripePaymentProvider stripePaymentProvider;
 
   private final AtomicInteger stripeCounter = new AtomicInteger();
+  private final AtomicInteger customerCounter = new AtomicInteger();
 
   @BeforeEach
   void setUp() {
@@ -92,7 +101,8 @@ class CouponOfferControllerIntegrationTests {
               request.active()
           );
         });
-    when(stripePaymentProvider.createCustomer(USER_EMAIL)).thenReturn("cus_generated");
+    when(stripePaymentProvider.createCustomer(eq(USER_EMAIL), anyString()))
+        .thenAnswer(_ -> "cus_generated_" + customerCounter.incrementAndGet());
   }
 
   @Test
@@ -187,7 +197,7 @@ class CouponOfferControllerIntegrationTests {
     Profile updatedProfile = profileRepository.findByUserId(user.getId()).orElseThrow();
     assertThat(updatedProfile.getPoints()).isEqualTo(80);
     assertThat(updatedProfile.getLastChangeReason()).isEqualTo(PointChangeReason.COUPON_PURCHASED);
-    assertThat(updatedProfile.getStripeCustomerId()).isEqualTo("cus_generated");
+    assertThat(updatedProfile.getStripeCustomerId()).startsWith("cus_generated_");
 
     Coupon issuedCoupon = couponRepository.findAll().getFirst();
     assertThat(issuedCoupon.getCouponOffer()).isNotNull();
@@ -203,7 +213,7 @@ class CouponOfferControllerIntegrationTests {
     assertThat(captor.getValue().amountOff()).isEqualTo(600L);
     assertThat(captor.getValue().name()).isEqualTo("Issued offer");
     assertThat(captor.getValue().maxRedemptions()).isEqualTo(1);
-    assertThat(captor.getValue().stripeCustomerId()).isEqualTo("cus_generated");
+    assertThat(captor.getValue().stripeCustomerId()).isEqualTo(updatedProfile.getStripeCustomerId());
   }
 
   @Test
@@ -259,6 +269,45 @@ class CouponOfferControllerIntegrationTests {
   }
 
   @Test
+  void reserve_sameLimitedOfferConcurrently_doesNotOversell() throws Exception {
+    User user = userRepository.findByEmail(USER_EMAIL).orElseThrow();
+    CouponOffer offer = couponOfferRepository.saveAndFlush(CouponOffer.builder()
+        .name("Limited")
+        .pointCost(10)
+        .amountOff(new BigDecimal("5.00"))
+        .active(true)
+        .maxPurchases(1)
+        .build());
+
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    CountDownLatch start = new CountDownLatch(1);
+    try {
+      var attempts = List.of(
+          executor.submit(() -> reserveWhenReleased(start, offer.getId(), user.getId())),
+          executor.submit(() -> reserveWhenReleased(start, offer.getId(), user.getId()))
+      );
+      start.countDown();
+
+      long successes = 0;
+      for (var attempt : attempts) {
+        if (attempt.get(5, TimeUnit.SECONDS)) {
+          successes++;
+        }
+      }
+
+      entityManager.clear();
+      CouponOffer updatedOffer = couponOfferRepository.findById(offer.getId()).orElseThrow();
+      Profile updatedProfile = profileRepository.findByUserId(user.getId()).orElseThrow();
+      assertThat(successes).isEqualTo(1);
+      assertThat(updatedOffer.getPurchaseCount()).isEqualTo(1);
+      assertThat(updatedOffer.isActive()).isFalse();
+      assertThat(updatedProfile.getPoints()).isEqualTo(110);
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void updateCouponOffer_whenCapReachedCanBeDeactivated() throws Exception {
     CouponOffer offer = couponOfferRepository.saveAndFlush(CouponOffer.builder()
@@ -310,5 +359,16 @@ class CouponOfferControllerIntegrationTests {
     profile.setPoints(points);
     profile.setStripeCustomerId(stripeCustomerId);
     profileRepository.saveAndFlush(profile);
+  }
+
+  private boolean reserveWhenReleased(CountDownLatch start, java.util.UUID offerId, java.util.UUID userId)
+      throws Exception {
+    start.await();
+    try {
+      purchaseTransactions.reserve(offerId, userId);
+      return true;
+    } catch (BadRequestApiException ex) {
+      return false;
+    }
   }
 }

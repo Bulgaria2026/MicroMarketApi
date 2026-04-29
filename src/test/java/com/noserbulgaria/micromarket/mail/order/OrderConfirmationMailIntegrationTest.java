@@ -89,7 +89,7 @@ class OrderConfirmationMailIntegrationTest {
     productRepository.deleteAll();
 
     AtomicInteger customerCounter = new AtomicInteger();
-    when(stripePaymentProvider.createCustomer(any()))
+    when(stripePaymentProvider.createCustomer(any(), any()))
         .thenAnswer(_ -> "cus_fake_" + customerCounter.incrementAndGet());
     when(stripePaymentProvider.createCheckoutSession(any(), any()))
         .thenAnswer(inv -> {

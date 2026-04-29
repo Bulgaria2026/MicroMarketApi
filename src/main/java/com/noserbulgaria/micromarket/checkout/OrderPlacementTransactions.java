@@ -2,7 +2,6 @@ package com.noserbulgaria.micromarket.checkout;
 
 import com.noserbulgaria.micromarket.auth.user.CustomUserDetails;
 import com.noserbulgaria.micromarket.customer.Customer;
-import com.noserbulgaria.micromarket.customer.CustomerRepository;
 import com.noserbulgaria.micromarket.customer.CustomerResolver;
 import com.noserbulgaria.micromarket.exception.BadRequestApiException;
 import com.noserbulgaria.micromarket.order.Order;
@@ -10,7 +9,6 @@ import com.noserbulgaria.micromarket.order.OrderItem;
 import com.noserbulgaria.micromarket.order.OrderNumberGenerator;
 import com.noserbulgaria.micromarket.order.OrderRepository;
 import com.noserbulgaria.micromarket.order.OrderStatusType;
-import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
 import com.noserbulgaria.micromarket.product.Product;
 import com.noserbulgaria.micromarket.product.ProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -37,9 +35,7 @@ public class OrderPlacementTransactions {
 
   private final ProductRepository productRepository;
   private final OrderRepository orderRepository;
-  private final CustomerRepository customerRepository;
   private final CustomerResolver customerResolver;
-  private final StripePaymentProvider stripePaymentProvider;
   private final OrderNumberGenerator orderNumberGenerator;
 
   private record ResolvedItem(Product product, int quantity) {
@@ -67,18 +63,6 @@ public class OrderPlacementTransactions {
       order.getOrderItems().add(toOrderItem(order, item));
     }
     return orderRepository.saveAndFlush(order);
-  }
-
-  /** Lazily creates and caches a Stripe Customer on the {@code customer} row so repeat orders reuse it. */
-  @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public String ensureStripeCustomer(UUID customerId, String email) {
-    Customer customer = customerRepository.findById(customerId).orElseThrow();
-    var existing = customer.getStripeCustomerId();
-    if (existing != null) return existing;
-    String stripeCustomerId = stripePaymentProvider.createCustomer(email);
-    customer.setStripeCustomerId(stripeCustomerId);
-    customerRepository.saveAndFlush(customer);
-    return stripeCustomerId;
   }
 
   /** No-ops if the session id is already set — matches Stripe's own idempotency-key replay semantics. */
@@ -156,5 +140,4 @@ public class OrderPlacementTransactions {
     BigDecimal multiplier = ONE_HUNDRED.subtract(BigDecimal.valueOf(product.getDiscount()));
     return product.getPrice().multiply(multiplier).divide(ONE_HUNDRED, 2, RoundingMode.HALF_UP);
   }
-
 }
