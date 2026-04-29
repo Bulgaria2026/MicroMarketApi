@@ -58,7 +58,7 @@ public class CouponTransactions {
   }
 
   @Transactional
-  protected Coupon patchCoupon(UUID id, CouponPatchRequest request){
+  public Coupon patchCoupon(UUID id, CouponPatchRequest request){
     Coupon coupon = couponRepository.findById(id)
         .orElseThrow(() -> new NotFoundApiException("Coupon with id '%s' not found".formatted(id)));
     if (coupon.getCouponOffer() != null) {
