@@ -10,7 +10,7 @@ import org.mapstruct.ReportingPolicy;
     componentModel = MappingConstants.ComponentModel.SPRING,
     unmappedTargetPolicy = ReportingPolicy.ERROR
 )
-public interface UserMapper {
+public interface AccountMapper {
 
   @Mapping(target = "id", source = "user.id")
   @Mapping(target = "createdAt", source = "user.createdAt")
@@ -18,5 +18,5 @@ public interface UserMapper {
   @Mapping(target = "email", source = "customer.email")
   @Mapping(target = "role", source = "user.role")
   @Mapping(target = "status", source = "user.status")
-  UserResponse toDto(Profile profile);
+  AccountResponse toDto(Profile profile);
 }

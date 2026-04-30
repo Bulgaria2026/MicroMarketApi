@@ -4,6 +4,7 @@ import com.noserbulgaria.micromarket.customer.Customer;
 import com.noserbulgaria.micromarket.customer.CustomerRepository;
 import com.noserbulgaria.micromarket.customer.Profile;
 import com.noserbulgaria.micromarket.customer.ProfileRepository;
+import com.noserbulgaria.micromarket.exception.StripeApiException;
 import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,7 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Objects;
 import java.util.UUID;
 
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.ArgumentMatchers.any;
@@ -35,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
-class UserControllerTest {
+class AccountControllerTest {
 
   private static final String ADMIN_EMAIL = "admin@micromarket.dev";
   private static final String USER_EMAIL = "user-controller-user@micromarket.dev";
@@ -70,8 +73,8 @@ class UserControllerTest {
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void patchUser_withValidRole_updatesRole() throws Exception {
-    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+  void patchAccount_withValidRole_updatesRole() throws Exception {
+    mockMvc.perform(patch("/account/{id}", userToUpdate.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"role": "ADMINISTRATOR"}
@@ -87,10 +90,10 @@ class UserControllerTest {
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void patchUser_withValidEmail_updatesEmail() throws Exception {
+  void patchAccount_withValidEmail_updatesEmail() throws Exception {
     String newEmail = UPDATED_EMAIL;
 
-    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+    mockMvc.perform(patch("/account/{id}", userToUpdate.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"email": "%s"}
@@ -106,8 +109,8 @@ class UserControllerTest {
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void patchUser_withValidStatus_updatesStatus() throws Exception {
-    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+  void patchAccount_withValidStatus_updatesStatus() throws Exception {
+    mockMvc.perform(patch("/account/{id}", userToUpdate.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"status": "INACTIVE"}
@@ -123,12 +126,12 @@ class UserControllerTest {
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void patchUser_withValidEmail_andStripeCustomerId_propagatesToStripe() throws Exception {
+  void patchAccount_withValidEmail_andStripeCustomerId_propagatesToStripe() throws Exception {
     Customer customer = customerRepository.findByEmail(USER_EMAIL).orElseThrow();
     customer.setStripeCustomerId("cus_test_propagate");
     customerRepository.saveAndFlush(customer);
 
-    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+    mockMvc.perform(patch("/account/{id}", userToUpdate.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"email": "%s"}
@@ -141,8 +144,8 @@ class UserControllerTest {
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void patchUser_withValidEmail_andNoStripeCustomerId_skipsStripeCall() throws Exception {
-    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+  void patchAccount_withValidEmail_andNoStripeCustomerId_skipsStripeCall() throws Exception {
+    mockMvc.perform(patch("/account/{id}", userToUpdate.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"email": "%s"}
@@ -154,12 +157,12 @@ class UserControllerTest {
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void patchUser_whenEmailUnchanged_doesNotCallStripe() throws Exception {
+  void patchAccount_whenEmailUnchanged_doesNotCallStripe() throws Exception {
     Customer customer = customerRepository.findByEmail(USER_EMAIL).orElseThrow();
     customer.setStripeCustomerId("cus_unchanged");
     customerRepository.saveAndFlush(customer);
 
-    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+    mockMvc.perform(patch("/account/{id}", userToUpdate.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"email": "%s"}
@@ -171,12 +174,12 @@ class UserControllerTest {
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void patchUser_normalizesNewEmailToLowercaseBeforePropagatingToStripe() throws Exception {
+  void patchAccount_normalizesNewEmailToLowercaseBeforePropagatingToStripe() throws Exception {
     Customer customer = customerRepository.findByEmail(USER_EMAIL).orElseThrow();
     customer.setStripeCustomerId("cus_test_normalize");
     customerRepository.saveAndFlush(customer);
 
-    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+    mockMvc.perform(patch("/account/{id}", userToUpdate.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"email": "MiXeD.CaSe@Example.COM"}
@@ -190,23 +193,23 @@ class UserControllerTest {
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void patchUser_withDuplicateEmail_returnsConflict() throws Exception {
+  void patchAccount_withDuplicateEmail_returnsConflict() throws Exception {
     createUserWithProfile(EXISTING_EMAIL, Role.USER);
 
-    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+    mockMvc.perform(patch("/account/{id}", userToUpdate.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"email": "%s"}
                 """.formatted(EXISTING_EMAIL)))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.title").value("Conflict"))
-        .andExpect(jsonPath("$.detail").value("User with email '%s' already exists".formatted(EXISTING_EMAIL)));
+        .andExpect(jsonPath("$.detail").value("Account with email '%s' already exists".formatted(EXISTING_EMAIL)));
   }
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void patchUser_withInvalidRole_returnsBadRequest() throws Exception {
-    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+  void patchAccount_withInvalidRole_returnsBadRequest() throws Exception {
+    mockMvc.perform(patch("/account/{id}", userToUpdate.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"role": "INVALID"}
@@ -214,13 +217,13 @@ class UserControllerTest {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.title").value("Bad Request"))
         .andExpect(jsonPath("$.detail").value("Request body is malformed or contains invalid values."))
-        .andExpect(jsonPath("$.instance").value("/user/" + userToUpdate.getId()));
+        .andExpect(jsonPath("$.instance").value("/account/" + userToUpdate.getId()));
   }
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void patchUser_withInvalidStatus_returnsBadRequest() throws Exception {
-    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+  void patchAccount_withInvalidStatus_returnsBadRequest() throws Exception {
+    mockMvc.perform(patch("/account/{id}", userToUpdate.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"status": "WRONG"}
@@ -228,13 +231,13 @@ class UserControllerTest {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.title").value("Bad Request"))
         .andExpect(jsonPath("$.detail").value("Request body is malformed or contains invalid values."))
-        .andExpect(jsonPath("$.instance").value("/user/" + userToUpdate.getId()));
+        .andExpect(jsonPath("$.instance").value("/account/" + userToUpdate.getId()));
   }
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void patchUser_withInvalidEmail_returnsBadRequest() throws Exception {
-    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+  void patchAccount_withInvalidEmail_returnsBadRequest() throws Exception {
+    mockMvc.perform(patch("/account/{id}", userToUpdate.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"email": "not-an-email"}
@@ -246,8 +249,8 @@ class UserControllerTest {
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void patchUser_withoutUpdates_returnsBadRequest() throws Exception {
-    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+  void patchAccount_withoutUpdates_returnsBadRequest() throws Exception {
+    mockMvc.perform(patch("/account/{id}", userToUpdate.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {}
@@ -259,17 +262,72 @@ class UserControllerTest {
 
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
-  void patchUser_forMissingUser_returnsNotFound() throws Exception {
+  void patchAccount_forMissingUser_returnsNotFound() throws Exception {
     UUID missingUserId = UUID.randomUUID();
 
-    mockMvc.perform(patch("/user/{id}", missingUserId)
+    mockMvc.perform(patch("/account/{id}", missingUserId)
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"role": "ADMINISTRATOR"}
                 """))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.title").value("Not Found"))
-        .andExpect(jsonPath("$.detail").value("User with id '%s' not found".formatted(missingUserId)));
+        .andExpect(jsonPath("$.detail").value("Account with id '%s' not found".formatted(missingUserId)));
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void patchAccount_whenStripeEmailDirty_propagatesEvenIfEmailUnchanged() throws Exception {
+    Customer customer = customerRepository.findByEmail(USER_EMAIL).orElseThrow();
+    customer.setStripeCustomerId("cus_pending_sync");
+    customer.setStripeEmailDirty(true);
+    customerRepository.saveAndFlush(customer);
+
+    mockMvc.perform(patch("/account/{id}", userToUpdate.getId())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"role": "ADMINISTRATOR"}
+                """))
+        .andExpect(status().isOk());
+
+    verify(stripePaymentProvider, times(1)).updateCustomerEmail("cus_pending_sync", USER_EMAIL);
+    Customer reloaded = customerRepository.findById(customer.getId()).orElseThrow();
+    Assertions.assertFalse(reloaded.isStripeEmailDirty());
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void patchAccount_whenStripeFails_keepsDirtyFlagForRetry() throws Exception {
+    Customer customer = customerRepository.findByEmail(USER_EMAIL).orElseThrow();
+    customer.setStripeCustomerId("cus_retry");
+    customerRepository.saveAndFlush(customer);
+
+    doThrow(new StripeApiException("simulated outage"))
+        .when(stripePaymentProvider).updateCustomerEmail(any(), any());
+
+    mockMvc.perform(patch("/account/{id}", userToUpdate.getId())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"email": "%s"}
+                """.formatted(UPDATED_EMAIL)))
+        .andExpect(status().isBadGateway());
+
+    Customer afterFail = customerRepository.findById(customer.getId()).orElseThrow();
+    Assertions.assertEquals(UPDATED_EMAIL, afterFail.getEmail());
+    Assertions.assertTrue(afterFail.isStripeEmailDirty());
+
+    reset(stripePaymentProvider);
+
+    mockMvc.perform(patch("/account/{id}", userToUpdate.getId())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"role": "ADMINISTRATOR"}
+                """))
+        .andExpect(status().isOk());
+
+    verify(stripePaymentProvider, times(1)).updateCustomerEmail("cus_retry", UPDATED_EMAIL);
+    Customer afterHeal = customerRepository.findById(customer.getId()).orElseThrow();
+    Assertions.assertFalse(afterHeal.isStripeEmailDirty());
   }
 
   private User createUserWithProfile(String email, Role role) {

@@ -3,7 +3,7 @@ package com.noserbulgaria.micromarket.auth.user;
 import java.time.Instant;
 import java.util.UUID;
 
-public record UserResponse(
+public record AccountResponse(
 
     UUID id,
 

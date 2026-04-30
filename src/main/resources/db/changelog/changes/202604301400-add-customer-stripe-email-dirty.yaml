@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - changeSet:
+      id: 202604301400-1
+      author: Lon60
+      changes:
+        - addColumn:
+            tableName: customer
+            columns:
+              - column:
+                  name: stripe_email_dirty
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false

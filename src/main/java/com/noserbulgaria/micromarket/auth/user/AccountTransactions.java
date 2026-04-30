@@ -17,33 +17,33 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Locale;
 import java.util.UUID;
 
-/** DB-only side of {@link UserService}. Split out so the orchestrator can call Stripe between transactions. */
+/** DB-only side of {@link AccountService}. Split out so the orchestrator can call Stripe between transactions. */
 @Service
 @RequiredArgsConstructor
-public class UserTransactions {
+public class AccountTransactions {
 
   private final ProfileRepository profileRepository;
   private final CustomerRepository customerRepository;
-  private final UserMapper userMapper;
+  private final AccountMapper accountMapper;
   private final RefreshTokenService refreshTokenService;
 
   /** Email-update side effect that needs to be propagated to Stripe after the DB tx commits. */
-  public record StripeEmailUpdate(String stripeCustomerId, String newEmail) {}
+  public record StripeEmailUpdate(UUID customerId, String stripeCustomerId, String newEmail) {}
 
-  public record PatchResult(UserResponse response, @Nullable StripeEmailUpdate stripeEmailUpdate) {}
+  public record PatchResult(AccountResponse response, @Nullable StripeEmailUpdate stripeEmailUpdate) {}
 
   @Transactional(readOnly = true)
-  public UserResponse getByIdOrThrow(UUID userId) {
-    return userMapper.toDto(profileByUserIdOrThrow(userId));
+  public AccountResponse getByIdOrThrow(UUID userId) {
+    return accountMapper.toDto(profileByUserIdOrThrow(userId));
   }
 
   @Transactional
-  public PatchResult patchUserOrThrow(UUID userId, UserPatchRequest dto) {
+  public PatchResult patchAccountOrThrow(UUID userId, AccountPatchRequest dto) {
     Profile profile = profileByUserIdOrThrow(userId);
     Customer customer = profile.getCustomer();
     User user = profile.getUser();
 
-    StripeEmailUpdate stripeEmailUpdate = applyEmailIfChanged(dto.email(), customer);
+    applyEmailIfChanged(dto.email(), customer);
     applyRoleIfChanged(dto.role(), user);
     applyStatusIfChanged(dto.status(), user);
 
@@ -52,25 +52,33 @@ public class UserTransactions {
       saved = profileRepository.saveAndFlush(profile);
     } catch (DataIntegrityViolationException | OptimisticLockingFailureException _) {
       throw new ConflictApiException(
-          "User with email '%s' already exists".formatted(dto.email()));
+          "Account with email '%s' already exists".formatted(dto.email()));
     }
-    return new PatchResult(userMapper.toDto(saved), stripeEmailUpdate);
+    return new PatchResult(accountMapper.toDto(saved), pendingStripeSync(saved.getCustomer()));
   }
 
-  private @Nullable StripeEmailUpdate applyEmailIfChanged(@Nullable String email, Customer customer) {
+  /** Compare-and-clear: only flips the dirty flag off when the DB email still matches what we just pushed to Stripe. */
+  @Transactional
+  public void clearStripeEmailDirtyIfMatches(UUID customerId, String syncedEmail) {
+    customerRepository.findById(customerId).ifPresent(c -> {
+      if (syncedEmail.equals(c.getEmail())) {
+        c.setStripeEmailDirty(false);
+      }
+    });
+  }
+
+  private void applyEmailIfChanged(@Nullable String email, Customer customer) {
     if (email == null) {
-      return null;
+      return;
     }
     String normalized = email.toLowerCase(Locale.ROOT);
     if (normalized.equals(customer.getEmail())) {
-      return null;
+      return;
     }
     if (customerRepository.findByEmail(normalized).isPresent()) {
-      throw new ConflictApiException("User with email '%s' already exists".formatted(email));
+      throw new ConflictApiException("Account with email '%s' already exists".formatted(email));
     }
     customer.setEmail(normalized);
-    String stripeCustomerId = customer.getStripeCustomerId();
-    return stripeCustomerId == null ? null : new StripeEmailUpdate(stripeCustomerId, normalized);
   }
 
   private void applyRoleIfChanged(@Nullable Role role, User user) {
@@ -91,8 +99,19 @@ public class UserTransactions {
     user.setStatus(status);
   }
 
+  private @Nullable StripeEmailUpdate pendingStripeSync(Customer customer) {
+    if (!customer.isStripeEmailDirty()) {
+      return null;
+    }
+    String stripeCustomerId = customer.getStripeCustomerId();
+    if (stripeCustomerId == null) {
+      return null;
+    }
+    return new StripeEmailUpdate(customer.getId(), stripeCustomerId, customer.getEmail());
+  }
+
   private Profile profileByUserIdOrThrow(UUID userId) {
     return profileRepository.findByUserId(userId)
-        .orElseThrow(() -> new NotFoundApiException("User with id '%s' not found".formatted(userId)));
+        .orElseThrow(() -> new NotFoundApiException("Account with id '%s' not found".formatted(userId)));
   }
 }

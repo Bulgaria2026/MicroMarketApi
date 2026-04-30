@@ -32,6 +32,9 @@ public class Customer extends ExtendedEntity {
   @Column(unique = true)
   private @Nullable String stripeCustomerId;
 
+  @Column(nullable = false)
+  private boolean stripeEmailDirty;
+
   @EqualsAndHashCode.Exclude
   @ToString.Exclude
   @OneToOne(mappedBy = "customer", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -50,6 +53,10 @@ public class Customer extends ExtendedEntity {
   }
 
   public void setEmail(String email) {
-    this.email = email.toLowerCase(Locale.ROOT);
+    String normalized = email.toLowerCase(Locale.ROOT);
+    if (this.stripeCustomerId != null && this.email != null && !normalized.equals(this.email)) {
+      this.stripeEmailDirty = true;
+    }
+    this.email = normalized;
   }
 }
