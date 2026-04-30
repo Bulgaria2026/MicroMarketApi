@@ -1,11 +1,13 @@
 package com.noserbulgaria.micromarket.coupon;
 
+import lombok.Builder;
 import org.jspecify.annotations.Nullable;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+@Builder
 public record ResolvedCouponInput(
     @Nullable UUID userId,
     @Nullable UUID stripeCustomerOwnerId,

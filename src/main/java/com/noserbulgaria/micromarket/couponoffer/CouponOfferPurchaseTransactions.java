@@ -13,7 +13,6 @@ import com.noserbulgaria.micromarket.exception.BadRequestApiException;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
 import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCoupon;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,7 +38,9 @@ public class CouponOfferPurchaseTransactions {
 
     User user = userRepository.findById(userId)
         .orElseThrow(() -> new NotFoundApiException("User with id '%s' not found".formatted(userId)));
-    Profile profile = ensureProfile(user);
+    Profile profile = profileRepository.findByUserId(user.getId())
+        .orElseThrow(() -> new IllegalStateException(
+            "User '%s' has no Profile".formatted(user.getId())));
 
     if (couponOffer.getPointCost() > 0) {
       int updated = profileRepository.trySpendPoints(user.getId(), couponOffer.getPointCost(), PointChangeReason.COUPON_PURCHASED);
@@ -121,23 +122,6 @@ public class CouponOfferPurchaseTransactions {
     }
     if (couponOffer.getMaxPurchases() != null && couponOffer.getPurchaseCount() >= couponOffer.getMaxPurchases()) {
       throw new BadRequestApiException("Coupon offer has reached its purchase limit");
-    }
-  }
-
-  private Profile ensureProfile(User user) {
-    return profileRepository.findByUserId(user.getId())
-        .orElseGet(() -> createProfileOrReload(user));
-  }
-
-  private Profile createProfileOrReload(User user) {
-    Profile profile = new Profile();
-    profile.setUser(user);
-    profile.setPoints(0);
-    try {
-      return profileRepository.saveAndFlush(profile);
-    } catch (DataIntegrityViolationException ex) {
-      return profileRepository.findByUserId(user.getId())
-          .orElseThrow(() -> ex);
     }
   }
 

@@ -4,6 +4,7 @@ import com.noserbulgaria.micromarket.customer.Customer;
 import com.noserbulgaria.micromarket.customer.CustomerRepository;
 import com.noserbulgaria.micromarket.customer.Profile;
 import com.noserbulgaria.micromarket.customer.ProfileRepository;
+import com.noserbulgaria.micromarket.payment.stripe.StripePaymentProvider;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,12 +16,17 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.test.context.support.TestExecutionEvent;
 import org.springframework.security.test.context.support.WithUserDetails;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
 import java.util.UUID;
 
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -51,6 +57,9 @@ class UserControllerTest {
 
   @Autowired
   private PasswordEncoder passwordEncoder;
+
+  @MockitoBean
+  private StripePaymentProvider stripePaymentProvider;
 
   private User userToUpdate;
 
@@ -110,6 +119,73 @@ class UserControllerTest {
 
     User updatedUser = userRepository.findById(userToUpdate.getId()).orElseThrow();
     Assertions.assertEquals(AccountStatus.INACTIVE, updatedUser.getStatus());
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void patchUser_withValidEmail_andStripeCustomerId_propagatesToStripe() throws Exception {
+    Customer customer = customerRepository.findByEmail(USER_EMAIL).orElseThrow();
+    customer.setStripeCustomerId("cus_test_propagate");
+    customerRepository.saveAndFlush(customer);
+
+    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"email": "%s"}
+                """.formatted(UPDATED_EMAIL)))
+        .andExpect(status().isOk());
+
+    verify(stripePaymentProvider, times(1))
+        .updateCustomerEmail("cus_test_propagate", UPDATED_EMAIL);
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void patchUser_withValidEmail_andNoStripeCustomerId_skipsStripeCall() throws Exception {
+    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"email": "%s"}
+                """.formatted(UPDATED_EMAIL)))
+        .andExpect(status().isOk());
+
+    verify(stripePaymentProvider, never()).updateCustomerEmail(any(), any());
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void patchUser_whenEmailUnchanged_doesNotCallStripe() throws Exception {
+    Customer customer = customerRepository.findByEmail(USER_EMAIL).orElseThrow();
+    customer.setStripeCustomerId("cus_unchanged");
+    customerRepository.saveAndFlush(customer);
+
+    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"email": "%s"}
+                """.formatted(USER_EMAIL)))
+        .andExpect(status().isOk());
+
+    verify(stripePaymentProvider, never()).updateCustomerEmail(any(), any());
+  }
+
+  @Test
+  @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
+  void patchUser_normalizesNewEmailToLowercaseBeforePropagatingToStripe() throws Exception {
+    Customer customer = customerRepository.findByEmail(USER_EMAIL).orElseThrow();
+    customer.setStripeCustomerId("cus_test_normalize");
+    customerRepository.saveAndFlush(customer);
+
+    mockMvc.perform(patch("/user/{id}", userToUpdate.getId())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"email": "MiXeD.CaSe@Example.COM"}
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.email").value("mixed.case@example.com"));
+
+    verify(stripePaymentProvider, times(1))
+        .updateCustomerEmail("cus_test_normalize", "mixed.case@example.com");
   }
 
   @Test

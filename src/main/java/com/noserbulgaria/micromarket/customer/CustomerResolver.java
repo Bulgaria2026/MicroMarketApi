@@ -18,7 +18,7 @@ public class CustomerResolver {
 
   private final CustomerRepository customerRepository;
 
-  /** Returns the Customer for the checkout: the caller's own if authenticated, otherwise a Guest by email. */
+  /** Returns the Customer for the checkout: the caller's own if authenticated, otherwise an unregistered Customer by email. */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public Customer resolveForCheckout(@Nullable CustomUserDetails userDetails, @Nullable String email) {
     if (userDetails != null) {

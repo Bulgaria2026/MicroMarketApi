@@ -14,6 +14,8 @@ import com.noserbulgaria.micromarket.exception.ConflictApiException;
 import com.noserbulgaria.micromarket.exception.NotFoundApiException;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -59,7 +61,12 @@ public class AuthService {
     profile.setUser(user);
     profile.setPoints(0);
     customer.setProfile(profile);
-    customerRepository.save(customer);
+    try {
+      customerRepository.saveAndFlush(customer);
+    } catch (DataIntegrityViolationException | OptimisticLockingFailureException _) {
+      throw new ConflictApiException(
+          "User with email '%s' already exists".formatted(request.email()));
+    }
 
     return buildAuthTokens(user, customer.getEmail(), refreshTokenService.issueForNewFamily(user));
   }

@@ -18,6 +18,7 @@ import com.stripe.net.RequestOptions;
 import com.stripe.param.CouponCreateParams;
 import com.stripe.param.CouponUpdateParams;
 import com.stripe.param.CustomerCreateParams;
+import com.stripe.param.CustomerUpdateParams;
 import com.stripe.param.PromotionCodeCreateParams;
 import com.stripe.param.PromotionCodeUpdateParams;
 import com.stripe.param.RefundCreateParams;
@@ -79,6 +80,18 @@ public class StripePaymentProvider {
           : stripeClient.v1().customers().create(params, options).getId();
     } catch (StripeException ex) {
       throw new StripeApiException("Failed to create Stripe customer", ex);
+    }
+  }
+
+  public void updateCustomerEmail(String stripeCustomerId, String email) {
+    CustomerUpdateParams params = CustomerUpdateParams.builder()
+        .setEmail(email)
+        .build();
+    try {
+      stripeClient.v1().customers().update(stripeCustomerId, params);
+    } catch (StripeException ex) {
+      throw new StripeApiException(
+          "Failed to update Stripe customer %s email".formatted(stripeCustomerId), ex);
     }
   }
 
