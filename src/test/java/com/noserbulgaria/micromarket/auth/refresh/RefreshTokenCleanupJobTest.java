@@ -4,8 +4,9 @@ import com.noserbulgaria.micromarket.auth.user.AccountStatus;
 import com.noserbulgaria.micromarket.auth.user.Role;
 import com.noserbulgaria.micromarket.auth.user.User;
 import com.noserbulgaria.micromarket.auth.user.UserRepository;
+import com.noserbulgaria.micromarket.customer.Customer;
+import com.noserbulgaria.micromarket.customer.CustomerRepository;
 import com.noserbulgaria.micromarket.customer.Profile;
-import com.noserbulgaria.micromarket.customer.ProfileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,7 +43,7 @@ class RefreshTokenCleanupJobTest {
   private UserRepository userRepository;
 
   @Autowired
-  private ProfileRepository profileRepository;
+  private CustomerRepository customerRepository;
 
   @Autowired
   private PasswordEncoder passwordEncoder;
@@ -52,16 +53,19 @@ class RefreshTokenCleanupJobTest {
   @BeforeEach
   void setUp() {
     User user = new User();
-    user.setEmail("cleanup@micromarket.dev");
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode("user123")));
     user.setRole(Role.USER);
     user.setStatus(AccountStatus.ACTIVE);
     user = userRepository.save(user);
 
+    Customer customer = new Customer();
+    customer.setEmail("cleanup@micromarket.dev");
     Profile profile = new Profile();
+    profile.setCustomer(customer);
     profile.setUser(user);
     profile.setPoints(0);
-    profileRepository.save(profile);
+    customer.setProfile(profile);
+    customerRepository.save(customer);
 
     userId = user.getId();
   }

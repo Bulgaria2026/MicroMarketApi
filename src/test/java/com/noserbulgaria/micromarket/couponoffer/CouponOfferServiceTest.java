@@ -94,7 +94,14 @@ class CouponOfferServiceTest {
   private com.noserbulgaria.micromarket.auth.user.CustomUserDetails newUserDetails(UUID userId) {
     com.noserbulgaria.micromarket.auth.user.User user = new com.noserbulgaria.micromarket.auth.user.User();
     user.setId(userId);
-    user.setEmail("user@example.com");
-    return new com.noserbulgaria.micromarket.auth.user.CustomUserDetails(user);
+    com.noserbulgaria.micromarket.customer.Customer customer =
+        new com.noserbulgaria.micromarket.customer.Customer();
+    customer.setEmail("user@example.com");
+    com.noserbulgaria.micromarket.customer.Profile profile =
+        new com.noserbulgaria.micromarket.customer.Profile();
+    profile.setUser(user);
+    profile.setCustomer(customer);
+    customer.setProfile(profile);
+    return new com.noserbulgaria.micromarket.auth.user.CustomUserDetails(profile);
   }
 }

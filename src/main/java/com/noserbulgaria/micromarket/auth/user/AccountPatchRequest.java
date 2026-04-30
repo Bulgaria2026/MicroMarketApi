@@ -5,7 +5,7 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import org.jspecify.annotations.Nullable;
 
-public record UserPatchRequest(
+public record AccountPatchRequest(
 
     @Nullable
     @Email(message = "A valid email must be provided")

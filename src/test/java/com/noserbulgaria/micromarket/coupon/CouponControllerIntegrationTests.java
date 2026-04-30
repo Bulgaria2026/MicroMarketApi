@@ -6,6 +6,8 @@ import com.noserbulgaria.micromarket.auth.user.User;
 import com.noserbulgaria.micromarket.auth.user.UserRepository;
 import com.noserbulgaria.micromarket.couponoffer.CouponOffer;
 import com.noserbulgaria.micromarket.couponoffer.CouponOfferRepository;
+import com.noserbulgaria.micromarket.customer.Customer;
+import com.noserbulgaria.micromarket.customer.CustomerRepository;
 import com.noserbulgaria.micromarket.customer.Profile;
 import com.noserbulgaria.micromarket.customer.ProfileRepository;
 import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCoupon;
@@ -63,6 +65,8 @@ class CouponControllerIntegrationTests {
   private UserRepository userRepository;
   @Autowired
   private ProfileRepository profileRepository;
+  @Autowired
+  private CustomerRepository customerRepository;
   @Autowired
   private PasswordEncoder passwordEncoder;
 
@@ -172,7 +176,7 @@ class CouponControllerIntegrationTests {
         .andExpect(jsonPath("$.code").value("USER-ONLY"));
 
     Profile profile = profileRepository.findByUserId(user.getId()).orElseThrow();
-    assertThat(profile.getStripeCustomerId()).isEqualTo("cus_generated");
+    assertThat(profile.getCustomer().getStripeCustomerId()).isEqualTo("cus_generated");
     verify(stripePaymentProvider).createCustomer(targetEmail, profile.getId().toString());
 
     ArgumentCaptor<StripeManagedCouponRequest> captor = ArgumentCaptor.forClass(StripeManagedCouponRequest.class);
@@ -442,7 +446,7 @@ class CouponControllerIntegrationTests {
   @Test
   @WithUserDetails(value = USER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getOwnCoupons_returnsOnlyCurrentUsersCoupons() throws Exception {
-    User user = userRepository.findByEmail(USER_EMAIL).orElseThrow();
+    User user = customerRepository.findByEmail(USER_EMAIL).orElseThrow().getProfile().getUser();
     User otherUser = createUser("other-user@micromarket.dev", true, "cus_other");
     couponRepository.saveAndFlush(coupon("MINE", user, "coupon_mine", "promo_mine"));
     couponRepository.saveAndFlush(coupon("NOT-MINE", otherUser, "coupon_other", "promo_other"));
@@ -470,39 +474,52 @@ class CouponControllerIntegrationTests {
   }
 
   private User createUser(String email, boolean withProfile, String stripeCustomerId) {
-    User user = userRepository.findByEmail(email)
-        .orElseGet(() -> {
-          User created = new User();
-          created.setEmail(email);
-          created.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
-          created.setRole(Role.USER);
-          created.setStatus(AccountStatus.ACTIVE);
-          return userRepository.saveAndFlush(created);
-        });
-
-    if (withProfile) {
-      Profile profile = profileRepository.findByUserId(user.getId())
-          .orElseGet(() -> {
-            Profile created = new Profile();
-            created.setUser(user);
-            created.setPoints(0);
-            return profileRepository.saveAndFlush(created);
-          });
-      profile.setStripeCustomerId(stripeCustomerId);
-      profileRepository.saveAndFlush(profile);
+    Customer existing = customerRepository.findByEmail(email).orElse(null);
+    if (existing != null) {
+      if (withProfile) {
+        existing.setStripeCustomerId(stripeCustomerId);
+        customerRepository.saveAndFlush(existing);
+      }
+      return existing.getProfile().getUser();
     }
+
+    User user = new User();
+    user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
+    user.setRole(Role.USER);
+    user.setStatus(AccountStatus.ACTIVE);
+    user = userRepository.saveAndFlush(user);
+
+    Customer customer = new Customer();
+    customer.setEmail(email);
+    if (withProfile) {
+      customer.setStripeCustomerId(stripeCustomerId);
+    }
+    Profile profile = new Profile();
+    profile.setUser(user);
+    profile.setCustomer(customer);
+    profile.setPoints(0);
+    customer.setProfile(profile);
+    customerRepository.saveAndFlush(customer);
     return user;
   }
 
   private void ensureUserExists(String email, Role role) {
-    if (userRepository.findByEmail(email).isPresent()) {
+    if (customerRepository.findByEmail(email).isPresent()) {
       return;
     }
     User user = new User();
-    user.setEmail(email);
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
     user.setRole(role);
     user.setStatus(AccountStatus.ACTIVE);
-    userRepository.saveAndFlush(user);
+    user = userRepository.saveAndFlush(user);
+
+    Customer customer = new Customer();
+    customer.setEmail(email);
+    Profile profile = new Profile();
+    profile.setUser(user);
+    profile.setCustomer(customer);
+    profile.setPoints(0);
+    customer.setProfile(profile);
+    customerRepository.saveAndFlush(customer);
   }
 }

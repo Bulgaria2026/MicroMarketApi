@@ -43,19 +43,24 @@ class ProfileControllerTest {
   private UserRepository userRepository;
 
   @Autowired
+  private CustomerRepository customerRepository;
+
+  @Autowired
   private ProfileRepository profileRepository;
 
   @Autowired
   private PasswordEncoder passwordEncoder;
 
   private User ownerUser;
+  private Customer ownerCustomer;
   private Profile ownerProfile;
 
   @BeforeEach
   void setUp() {
-    ownerUser = createUserWithProfile(OWNER_EMAIL, Role.USER);
-    createUserWithProfile(OTHER_EMAIL, Role.USER);
+    ownerUser = createRegisteredCustomer(OWNER_EMAIL, Role.USER);
+    createRegisteredCustomer(OTHER_EMAIL, Role.USER);
     ownerProfile = profileRepository.findByUserId(ownerUser.getId()).orElseThrow();
+    ownerCustomer = ownerProfile.getCustomer();
   }
 
   @Test
@@ -63,9 +68,9 @@ class ProfileControllerTest {
   void getById_asOwner_returnsProfile() throws Exception {
     mockMvc.perform(get("/profile/own"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.id").value(ownerProfile.getId().toString()))
+        .andExpect(jsonPath("$.id").value(ownerCustomer.getId().toString()))
         .andExpect(jsonPath("$.user.id").value(ownerUser.getId().toString()))
-        .andExpect(jsonPath("$.user.email").value(ownerUser.getEmail()))
+        .andExpect(jsonPath("$.user.email").value(OWNER_EMAIL))
         .andExpect(jsonPath("$.user.role").value(ownerUser.getRole().name()))
         .andExpect(jsonPath("$.user.status").value(ownerUser.getStatus().name()))
         .andExpect(jsonPath("$.points").value(ownerProfile.getPoints()))
@@ -78,18 +83,18 @@ class ProfileControllerTest {
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getById_asAdministrator_returnsProfile() throws Exception {
-    mockMvc.perform(get("/profile/{id}", ownerProfile.getId()))
+    mockMvc.perform(get("/profile/{id}", ownerCustomer.getId()))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.id").value(ownerProfile.getId().toString()))
+        .andExpect(jsonPath("$.id").value(ownerCustomer.getId().toString()))
         .andExpect(jsonPath("$.user.id").value(ownerUser.getId().toString()))
-        .andExpect(jsonPath("$.user.email").value(ownerUser.getEmail()))
+        .andExpect(jsonPath("$.user.email").value(OWNER_EMAIL))
         .andExpect(jsonPath("$.user.password").doesNotExist());
   }
 
   @Test
   @WithUserDetails(value = OTHER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getById_asDifferentUser_returnsForbidden() throws Exception {
-    mockMvc.perform(get("/profile/{id}", ownerProfile.getId()))
+    mockMvc.perform(get("/profile/{id}", ownerCustomer.getId()))
         .andExpect(status().isForbidden());
   }
 
@@ -107,13 +112,13 @@ class ProfileControllerTest {
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void updateById_asAdministrator_updatesProfile() throws Exception {
-    mockMvc.perform(put("/profile/{id}", ownerProfile.getId())
+    mockMvc.perform(put("/profile/{id}", ownerCustomer.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"points": 200}
                 """))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.id").value(ownerProfile.getId().toString()))
+        .andExpect(jsonPath("$.id").value(ownerCustomer.getId().toString()))
         .andExpect(jsonPath("$.user.id").value(ownerUser.getId().toString()))
         .andExpect(jsonPath("$.points").value(200));
   }
@@ -121,7 +126,7 @@ class ProfileControllerTest {
   @Test
   @WithUserDetails(value = OWNER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void updateById_asOwner_returnsForbidden() throws Exception {
-    mockMvc.perform(put("/profile/{id}", ownerProfile.getId())
+    mockMvc.perform(put("/profile/{id}", ownerCustomer.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"points": 200}
@@ -132,7 +137,7 @@ class ProfileControllerTest {
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void updateById_invalidBody_returnsBadRequest() throws Exception {
-    mockMvc.perform(put("/profile/{id}", ownerProfile.getId())
+    mockMvc.perform(put("/profile/{id}", ownerCustomer.getId())
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"points": -1}
@@ -157,18 +162,21 @@ class ProfileControllerTest {
         .andExpect(jsonPath("$.detail").value("Profile with id '%s' not found".formatted(profileId)));
   }
 
-  private User createUserWithProfile(String email, Role role) {
+  private User createRegisteredCustomer(String email, Role role) {
     User user = new User();
-    user.setEmail(email);
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
     user.setRole(role);
     user.setStatus(AccountStatus.ACTIVE);
     user = userRepository.saveAndFlush(user);
 
+    Customer customer = new Customer();
+    customer.setEmail(email);
     Profile profile = new Profile();
+    profile.setCustomer(customer);
     profile.setUser(user);
     profile.setPoints(0);
-    profileRepository.saveAndFlush(profile);
+    customer.setProfile(profile);
+    customerRepository.saveAndFlush(customer);
     return user;
   }
 }

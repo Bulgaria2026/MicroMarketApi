@@ -32,7 +32,7 @@ public class CheckoutController {
   @Operation(
       summary = "Place an order and start payment",
       description = """
-          Anonymous callers must supply {@code email}; authenticated callers ignore it and use their Profile. Returns
+          Anonymous callers must supply {@code email}; authenticated callers ignore it and use their account. Returns
           a Stripe-hosted checkout URL to redirect to. Order transitions to PAID asynchronously on webhook delivery.
           """)
   @ApiResponse(responseCode = "201", description = "Order placed and Checkout Session created")

@@ -4,6 +4,7 @@ import com.noserbulgaria.micromarket.auth.refresh.RefreshTokenRepository;
 import com.noserbulgaria.micromarket.auth.user.AccountStatus;
 import com.noserbulgaria.micromarket.auth.user.User;
 import com.noserbulgaria.micromarket.auth.user.UserRepository;
+import com.noserbulgaria.micromarket.customer.CustomerRepository;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,13 +42,17 @@ class AuthControllerTest {
   private UserRepository userRepository;
 
   @Autowired
+  private CustomerRepository customerRepository;
+
+  @Autowired
   private RefreshTokenRepository refreshTokenRepository;
 
   @BeforeEach
   void setUp() {
     refreshTokenRepository.deleteAll();
 
-    User user = userRepository.findByEmail("user@micromarket.dev").orElseThrow();
+    User user = Objects.requireNonNull(
+        customerRepository.findByEmail("user@micromarket.dev").orElseThrow().getProfile()).getUser();
     user.setStatus(AccountStatus.ACTIVE);
     userRepository.saveAndFlush(user);
   }
@@ -314,7 +319,8 @@ class AuthControllerTest {
   }
 
   private void deactivateTestUser() {
-    User user = userRepository.findByEmail("user@micromarket.dev").orElseThrow();
+    User user = Objects.requireNonNull(
+        customerRepository.findByEmail("user@micromarket.dev").orElseThrow().getProfile()).getUser();
     user.setStatus(AccountStatus.INACTIVE);
     userRepository.saveAndFlush(user);
   }

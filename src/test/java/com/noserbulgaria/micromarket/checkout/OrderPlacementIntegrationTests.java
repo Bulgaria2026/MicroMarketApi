@@ -10,8 +10,6 @@ import com.noserbulgaria.micromarket.couponoffer.CouponOffer;
 import com.noserbulgaria.micromarket.couponoffer.CouponOfferRepository;
 import com.noserbulgaria.micromarket.customer.Customer;
 import com.noserbulgaria.micromarket.customer.CustomerRepository;
-import com.noserbulgaria.micromarket.customer.Guest;
-import com.noserbulgaria.micromarket.customer.GuestRepository;
 import com.noserbulgaria.micromarket.customer.PointChangeReason;
 import com.noserbulgaria.micromarket.customer.Profile;
 import com.noserbulgaria.micromarket.customer.ProfileRepository;
@@ -72,30 +70,17 @@ class OrderPlacementIntegrationTests {
   private static final String PASSWORD = "user123";
   private static final String SIGNATURE_HEADER = "Stripe-Signature";
 
-  @Autowired
-  private MockMvc mockMvc;
-  @Autowired
-  private UserRepository userRepository;
-  @Autowired
-  private ProductRepository productRepository;
-  @Autowired
-  private OrderRepository orderRepository;
-  @Autowired
-  private GuestRepository guestRepository;
-  @Autowired
-  private ProfileRepository profileRepository;
-  @Autowired
-  private CustomerRepository customerRepository;
-  @Autowired
-  private CouponRepository couponRepository;
-  @Autowired
-  private CouponOfferRepository couponOfferRepository;
-  @Autowired
-  private StripeEventRepository stripeEventRepository;
-  @Autowired
-  private PasswordEncoder passwordEncoder;
-  @Autowired
-  private TransactionTemplate transactionTemplate;
+  @Autowired private MockMvc mockMvc;
+  @Autowired private UserRepository userRepository;
+  @Autowired private ProductRepository productRepository;
+  @Autowired private OrderRepository orderRepository;
+  @Autowired private ProfileRepository profileRepository;
+  @Autowired private CustomerRepository customerRepository;
+  @Autowired private CouponRepository couponRepository;
+  @Autowired private CouponOfferRepository couponOfferRepository;
+  @Autowired private StripeEventRepository stripeEventRepository;
+  @Autowired private PasswordEncoder passwordEncoder;
+  @Autowired private TransactionTemplate transactionTemplate;
 
   @MockitoBean
   private StripePaymentProvider stripePaymentProvider;
@@ -109,15 +94,13 @@ class OrderPlacementIntegrationTests {
     orderRepository.deleteAll();
     couponRepository.deleteAll();
     couponOfferRepository.deleteAll();
-    profileRepository.deleteAll();
-    guestRepository.deleteAll();
     customerRepository.deleteAll();
     productRepository.deleteAll();
     userRepository.deleteAll();
 
     AtomicInteger customerCounter = new AtomicInteger();
     when(stripePaymentProvider.createCustomer(any(), any()))
-        .thenAnswer(inv -> "cus_fake_" + customerCounter.incrementAndGet());
+        .thenAnswer(_ -> "cus_fake_" + customerCounter.incrementAndGet());
     when(stripePaymentProvider.createCheckoutSession(any(), any()))
         .thenAnswer(inv -> {
           Order order = inv.getArgument(0);
@@ -126,16 +109,32 @@ class OrderPlacementIntegrationTests {
         });
 
     User user = new User();
-    user.setEmail(USER_EMAIL);
     user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
     user.setRole(Role.USER);
-    userRepository.saveAndFlush(user);
+    user = userRepository.saveAndFlush(user);
+
+    Customer customer = new Customer();
+    customer.setEmail(USER_EMAIL);
+    Profile profile = new Profile();
+    profile.setCustomer(customer);
+    profile.setUser(user);
+    profile.setPoints(0);
+    customer.setProfile(profile);
+    customerRepository.saveAndFlush(customer);
 
     User secondUser = new User();
-    secondUser.setEmail(SECOND_USER_EMAIL);
     secondUser.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
     secondUser.setRole(Role.USER);
-    userRepository.saveAndFlush(secondUser);
+    secondUser = userRepository.saveAndFlush(secondUser);
+
+    Customer secondCustomer = new Customer();
+    secondCustomer.setEmail(SECOND_USER_EMAIL);
+    Profile secondProfile = new Profile();
+    secondProfile.setCustomer(secondCustomer);
+    secondProfile.setUser(secondUser);
+    secondProfile.setPoints(0);
+    secondCustomer.setProfile(secondProfile);
+    customerRepository.saveAndFlush(secondCustomer);
 
     sparklingWater = product("Sparkling Water", new BigDecimal("29.99"), 0, true, 100);
     coffeeBeans = product("Coffee Beans", new BigDecimal("99.50"), 10, true, 5);
@@ -147,8 +146,6 @@ class OrderPlacementIntegrationTests {
     orderRepository.deleteAll();
     couponRepository.deleteAll();
     couponOfferRepository.deleteAll();
-    profileRepository.deleteAll();
-    guestRepository.deleteAll();
     customerRepository.deleteAll();
     productRepository.deleteAll();
     userRepository.deleteAll();
@@ -182,7 +179,8 @@ class OrderPlacementIntegrationTests {
       return order.getCustomer().getId();
     });
 
-    Guest guest = guestRepository.findByEmailIgnoreCase("guest@example.com").orElseThrow();
+    Customer guest = customerRepository.findByEmail("guest@example.com").orElseThrow();
+    assertThat(guest.isRegistered()).isFalse();
     assertThat(customerId).isEqualTo(guest.getId());
   }
 
@@ -196,7 +194,8 @@ class OrderPlacementIntegrationTests {
             .contentType(MediaType.APPLICATION_JSON)
             .content(body(sparklingWater.getId(), 1, "REPEAT@EXAMPLE.COM")))
         .andExpect(status().isCreated());
-    assertThat(guestRepository.findAll()).hasSize(1);
+    assertThat(customerRepository.findByEmail("repeat@example.com")).isPresent();
+    assertThat(customerRepository.findAll().stream().filter(c -> !c.isRegistered()).toList()).hasSize(1);
   }
 
   @Test
@@ -204,15 +203,14 @@ class OrderPlacementIntegrationTests {
     placeOrderAsGuest(sparklingWater.getId(), 1, "stripe-reuse@example.com");
     placeOrderAsGuest(sparklingWater.getId(), 1, "stripe-reuse@example.com");
 
-    Guest guest = guestRepository.findByEmailIgnoreCase("stripe-reuse@example.com").orElseThrow();
-    Customer reloaded = customerRepository.findById(guest.getId()).orElseThrow();
-    assertThat(reloaded.getStripeCustomerId()).isNotNull();
+    Customer guest = customerRepository.findByEmail("stripe-reuse@example.com").orElseThrow();
+    assertThat(guest.getStripeCustomerId()).isNotNull();
 
     verify(stripePaymentProvider, times(1)).createCustomer(eq("stripe-reuse@example.com"), any());
     ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
     verify(stripePaymentProvider, times(2)).createCheckoutSession(any(), captor.capture());
     assertThat(captor.getAllValues())
-        .containsExactly(reloaded.getStripeCustomerId(), reloaded.getStripeCustomerId());
+        .containsExactly(guest.getStripeCustomerId(), guest.getStripeCustomerId());
   }
 
   @Test
@@ -225,9 +223,9 @@ class OrderPlacementIntegrationTests {
   }
 
   @Test
-  void authenticatedCheckout_createsProfileLazily() throws Exception {
+  void authenticatedCheckout_reusesExistingCustomer() throws Exception {
     String token = accessTokenFor(USER_EMAIL, PASSWORD);
-    assertThat(profileRepository.findAll()).isEmpty();
+    long customersBefore = customerRepository.count();
 
     mockMvc.perform(post("/order")
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -235,7 +233,7 @@ class OrderPlacementIntegrationTests {
             .content(body(sparklingWater.getId(), 1, null)))
         .andExpect(status().isCreated());
 
-    assertThat(profileRepository.findAll()).hasSize(1);
+    assertThat(customerRepository.count()).isEqualTo(customersBefore);
 
     mockMvc.perform(post("/order")
             .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -243,7 +241,7 @@ class OrderPlacementIntegrationTests {
             .content(body(sparklingWater.getId(), 1, null)))
         .andExpect(status().isCreated());
 
-    assertThat(profileRepository.findAll()).hasSize(1);
+    assertThat(customerRepository.count()).isEqualTo(customersBefore);
   }
 
   @Test
@@ -261,6 +259,7 @@ class OrderPlacementIntegrationTests {
 
   @Test
   void checkout_insufficientStock_returnsBadRequestAndDoesNotPersistOrder() throws Exception {
+    long customersBefore = customerRepository.count();
     mockMvc.perform(post("/order")
             .contentType(MediaType.APPLICATION_JSON)
             .content(body(coffeeBeans.getId(), 999, "bulk@example.com")))
@@ -268,7 +267,7 @@ class OrderPlacementIntegrationTests {
         .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("Insufficient stock")));
 
     assertThat(orderRepository.findAll()).isEmpty();
-    assertThat(guestRepository.findAll()).isEmpty();
+    assertThat(customerRepository.count()).isEqualTo(customersBefore);
   }
 
   @Test
@@ -291,12 +290,10 @@ class OrderPlacementIntegrationTests {
 
   @Test
   void webhook_checkoutSucceeded_withKnownPromotionCode_storesCouponSnapshot() throws Exception {
-    User user = userRepository.findByEmail(USER_EMAIL).orElseThrow();
-    Profile profile = new Profile();
-    profile.setUser(user);
-    profile.setPoints(0);
-    profile.setStripeCustomerId("cus_user");
-    profileRepository.saveAndFlush(profile);
+    Customer customer = customerRepository.findByEmail(USER_EMAIL).orElseThrow();
+    customer.setStripeCustomerId("cus_user");
+    customerRepository.saveAndFlush(customer);
+    User user = customer.getProfile().getUser();
 
     CouponOffer offer = couponOfferRepository.saveAndFlush(CouponOffer.builder()
         .name("Offer")
@@ -388,12 +385,10 @@ class OrderPlacementIntegrationTests {
 
   @Test
   void authenticatedCheckout_withOtherUsersCouponId_ignoresUnsupportedField() throws Exception {
-    User owner = userRepository.findByEmail(SECOND_USER_EMAIL).orElseThrow();
-    Profile ownerProfile = new Profile();
-    ownerProfile.setUser(owner);
-    ownerProfile.setPoints(0);
-    ownerProfile.setStripeCustomerId("cus_owner");
-    profileRepository.saveAndFlush(ownerProfile);
+    Customer ownerCustomer = customerRepository.findByEmail(SECOND_USER_EMAIL).orElseThrow();
+    ownerCustomer.setStripeCustomerId("cus_owner");
+    customerRepository.saveAndFlush(ownerCustomer);
+    User owner = ownerCustomer.getProfile().getUser();
 
     Coupon coupon = couponRepository.saveAndFlush(Coupon.builder()
         .user(owner)
@@ -490,12 +485,10 @@ class OrderPlacementIntegrationTests {
 
   @Test
   void authenticatedCheckout_withOwnedCouponCode_ignoresUnsupportedField() throws Exception {
-    User user = userRepository.findByEmail(USER_EMAIL).orElseThrow();
-    Profile profile = new Profile();
-    profile.setUser(user);
-    profile.setPoints(0);
-    profile.setStripeCustomerId("cus_user_code");
-    profileRepository.saveAndFlush(profile);
+    Customer customer = customerRepository.findByEmail(USER_EMAIL).orElseThrow();
+    customer.setStripeCustomerId("cus_user_code");
+    customerRepository.saveAndFlush(customer);
+    User user = customer.getProfile().getUser();
 
     Coupon coupon = couponRepository.saveAndFlush(Coupon.builder()
         .user(user)
@@ -532,12 +525,10 @@ class OrderPlacementIntegrationTests {
 
   @Test
   void webhook_checkoutSucceeded_marksSingleUseCouponRedeemedAndInactive() throws Exception {
-    User user = userRepository.findByEmail(USER_EMAIL).orElseThrow();
-    Profile profile = new Profile();
-    profile.setUser(user);
-    profile.setPoints(0);
-    profile.setStripeCustomerId("cus_user");
-    profileRepository.saveAndFlush(profile);
+    Customer customer = customerRepository.findByEmail(USER_EMAIL).orElseThrow();
+    customer.setStripeCustomerId("cus_user");
+    customerRepository.saveAndFlush(customer);
+    User user = customer.getProfile().getUser();
 
     Coupon coupon = couponRepository.saveAndFlush(Coupon.builder()
         .user(user)
@@ -586,20 +577,13 @@ class OrderPlacementIntegrationTests {
 
   @Test
   void generalUseCoupon_canBeUsedOncePerUserUntilCap() throws Exception {
-    User firstUser = userRepository.findByEmail(USER_EMAIL).orElseThrow();
-    User secondUser = userRepository.findByEmail(SECOND_USER_EMAIL).orElseThrow();
+    Customer firstCustomer = customerRepository.findByEmail(USER_EMAIL).orElseThrow();
+    firstCustomer.setStripeCustomerId("cus_first");
+    customerRepository.saveAndFlush(firstCustomer);
 
-    Profile firstProfile = new Profile();
-    firstProfile.setUser(firstUser);
-    firstProfile.setPoints(0);
-    firstProfile.setStripeCustomerId("cus_first");
-    profileRepository.saveAndFlush(firstProfile);
-
-    Profile secondProfile = new Profile();
-    secondProfile.setUser(secondUser);
-    secondProfile.setPoints(0);
-    secondProfile.setStripeCustomerId("cus_second");
-    profileRepository.saveAndFlush(secondProfile);
+    Customer secondCustomer = customerRepository.findByEmail(SECOND_USER_EMAIL).orElseThrow();
+    secondCustomer.setStripeCustomerId("cus_second");
+    customerRepository.saveAndFlush(secondCustomer);
 
     Coupon coupon = couponRepository.saveAndFlush(Coupon.builder()
         .code("GENERAL")
@@ -672,8 +656,7 @@ class OrderPlacementIntegrationTests {
             .content("{}"))
         .andExpect(status().isOk());
 
-    Profile profile = profileRepository.findByUserId(userRepository.findByEmail(USER_EMAIL).orElseThrow().getId())
-        .orElseThrow();
+    Profile profile = profileRepository.findByCustomer_Email(USER_EMAIL).orElseThrow();
     assertThat(profile.getPoints()).isEqualTo(59L);
     assertThat(profile.getLastChangeReason()).isEqualTo(PointChangeReason.ORDER_EARNED);
     assertThat(orderRepository.findById(orderId).orElseThrow().isPointsAwarded()).isTrue();
@@ -1004,13 +987,13 @@ class OrderPlacementIntegrationTests {
             .content(body(sparklingWater.getId(), 1, null)))
         .andExpect(status().isCreated());
 
-    Profile profile = profileRepository.findAll().getFirst();
-    assertThat(profile.getStripeCustomerId()).isNotNull();
+    Customer customer = customerRepository.findByEmail(USER_EMAIL).orElseThrow();
+    assertThat(customer.getStripeCustomerId()).isNotNull();
 
     ArgumentCaptor<String> customerCaptor = ArgumentCaptor.forClass(String.class);
     verify(stripePaymentProvider, times(2)).createCheckoutSession(any(), customerCaptor.capture());
     assertThat(customerCaptor.getAllValues())
-        .containsExactly(profile.getStripeCustomerId(), profile.getStripeCustomerId());
+        .containsExactly(customer.getStripeCustomerId(), customer.getStripeCustomerId());
   }
 
   @Test

@@ -2,7 +2,7 @@ package com.noserbulgaria.micromarket.mail.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.noserbulgaria.micromarket.customer.Guest;
+import com.noserbulgaria.micromarket.customer.Customer;
 import com.noserbulgaria.micromarket.order.Order;
 import com.noserbulgaria.micromarket.order.OrderItem;
 import com.noserbulgaria.micromarket.order.OrderStatusType;
@@ -136,7 +136,7 @@ class OrderConfirmationViewMapperTest {
   }
 
   private static Order order(String number, BigDecimal subtotal, BigDecimal paidTotal, Set<OrderItem> items) {
-    Guest customer = new Guest();
+    Customer customer = new Customer();
     customer.setEmail("buyer@example.com");
     Order order = Order.builder()
         .orderNumber(number)

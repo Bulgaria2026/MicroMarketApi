@@ -10,7 +10,6 @@ import com.noserbulgaria.micromarket.exception.NotFoundApiException;
 import com.noserbulgaria.micromarket.payment.stripe.StripeManagedCoupon;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,21 +31,32 @@ public class CouponTransactions {
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public ResolvedCouponInput resolveDirectCouponInputForCreate(CouponRequest request) {
     User user = resolveUser(request.userId());
-    Profile profile = user == null ? null : ensureProfile(user);
-    String code = request.code() != null ? normalizeCode(request.code()) : generateCouponCode();
-    ensureCodeAvailable(code, null);
-    return new ResolvedCouponInput(
-        user == null ? null : user.getId(),
-        profile == null ? null : profile.getId(),
-        user == null ? null : user.getEmail(),
-        code,
-        normalizeName(request.name()),
-        request.expiryDate(),
-        request.pointCost() == null ? 0 : request.pointCost(),
-        normalizeAmountOff(request.amountOff()),
-        normalizeMaxRedemptions(user, request.maxRedemptions()),
-        request.active() == null || request.active()
-    );
+    Profile profile = user == null ? null : profileByUserOrThrow(user);
+
+    String requestedCode = request.code();
+    String code = requestedCode != null ? normalizeCode(requestedCode) : generateCouponCode();
+    ensureCodeAvailable(code);
+
+    UUID userId = user == null ? null : user.getId();
+    UUID profileId = profile == null ? null : profile.getId();
+    String customerEmail = profile == null ? null : profile.getCustomer().getEmail();
+
+    Integer rawPointCost = request.pointCost();
+    int pointCost = rawPointCost == null ? 0 : rawPointCost;
+    boolean active = !Boolean.FALSE.equals(request.active());
+
+    return ResolvedCouponInput.builder()
+        .userId(userId)
+        .stripeCustomerOwnerId(profileId)
+        .stripeCustomerEmail(customerEmail)
+        .code(code)
+        .name(normalizeName(request.name()))
+        .expiryDate(request.expiryDate())
+        .pointCost(pointCost)
+        .amountOff(normalizeAmountOff(request.amountOff()))
+        .maxRedemptions(normalizeMaxRedemptions(user, request.maxRedemptions()))
+        .active(active)
+        .build();
   }
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -58,7 +68,7 @@ public class CouponTransactions {
   }
 
   @Transactional
-  public Coupon patchCoupon(UUID id, CouponPatchRequest request){
+  public Coupon patchCoupon(UUID id, CouponPatchRequest request) {
     Coupon coupon = couponRepository.findById(id)
         .orElseThrow(() -> new NotFoundApiException("Coupon with id '%s' not found".formatted(id)));
     if (coupon.getCouponOffer() != null) {
@@ -72,8 +82,9 @@ public class CouponTransactions {
       throw new BadRequestApiException("Patch must include name or active");
     }
 
-    if (request.getName() != null) {
-      coupon.setName(normalizeName(request.getName()));
+    String name = request.getName();
+    if (name != null) {
+      coupon.setName(normalizeName(name));
     }
 
     Boolean active = request.getActive();
@@ -88,8 +99,9 @@ public class CouponTransactions {
   }
 
   private void applyLocalState(Coupon coupon, ResolvedCouponInput input) {
+    UUID userId = input.userId();
     coupon.setCouponOffer(null);
-    coupon.setUser(input.userId() == null ? null : userRepository.getReferenceById(input.userId()));
+    coupon.setUser(userId == null ? null : userRepository.getReferenceById(userId));
     coupon.setCode(input.code());
     coupon.setName(input.name());
     coupon.setExpiryDate(input.expiryDate());
@@ -115,21 +127,10 @@ public class CouponTransactions {
         .orElseThrow(() -> new NotFoundApiException("User with id '%s' not found".formatted(userId)));
   }
 
-  private Profile ensureProfile(User user) {
+  private Profile profileByUserOrThrow(User user) {
     return profileRepository.findByUserId(user.getId())
-        .orElseGet(() -> createProfileOrReload(user));
-  }
-
-  private Profile createProfileOrReload(User user) {
-    Profile profile = new Profile();
-    profile.setUser(user);
-    profile.setPoints(0);
-    try {
-      return profileRepository.saveAndFlush(profile);
-    } catch (DataIntegrityViolationException ex) {
-      return profileRepository.findByUserId(user.getId())
-          .orElseThrow(() -> ex);
-    }
+        .orElseThrow(() -> new IllegalStateException(
+            "User '%s' has no Profile".formatted(user.getId())));
   }
 
   private String generateCouponCode() {
@@ -160,7 +161,7 @@ public class CouponTransactions {
   private BigDecimal normalizeAmountOff(BigDecimal amountOff) {
     try {
       return amountOff.setScale(2, RoundingMode.UNNECESSARY);
-    } catch (ArithmeticException ex) {
+    } catch (ArithmeticException _) {
       throw new BadRequestApiException("amountOff must have at most 2 decimal places");
     }
   }
@@ -172,16 +173,8 @@ public class CouponTransactions {
     return maxRedemptions;
   }
 
-  private void ensureCodeAvailable(String code, @Nullable UUID currentCouponId) {
-    if (!couponRepository.existsByCode(code)) {
-      return;
-    }
-    if (currentCouponId == null) {
-      throw new ConflictApiException("Coupon with code '%s' already exists".formatted(code));
-    }
-    Coupon existing = couponRepository.findOne((root, _, cb) -> cb.equal(root.get(Coupon_.code), code))
-        .orElseThrow(() -> new ConflictApiException("Coupon with code '%s' already exists".formatted(code)));
-    if (!existing.getId().equals(currentCouponId)) {
+  private void ensureCodeAvailable(String code) {
+    if (couponRepository.existsByCode(code)) {
       throw new ConflictApiException("Coupon with code '%s' already exists".formatted(code));
     }
   }

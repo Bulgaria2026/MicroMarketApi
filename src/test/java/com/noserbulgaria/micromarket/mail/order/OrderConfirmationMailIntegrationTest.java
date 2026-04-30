@@ -11,8 +11,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import com.noserbulgaria.micromarket.customer.CustomerRepository;
-import com.noserbulgaria.micromarket.customer.GuestRepository;
-import com.noserbulgaria.micromarket.customer.ProfileRepository;
 import com.noserbulgaria.micromarket.mail.EmailAsyncConfig;
 import com.noserbulgaria.micromarket.mail.MailSender;
 import com.noserbulgaria.micromarket.order.Order;
@@ -68,8 +66,6 @@ class OrderConfirmationMailIntegrationTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private ProductRepository productRepository;
   @Autowired private OrderRepository orderRepository;
-  @Autowired private GuestRepository guestRepository;
-  @Autowired private ProfileRepository profileRepository;
   @Autowired private CustomerRepository customerRepository;
   @Autowired private StripeEventRepository stripeEventRepository;
   @Autowired private TransactionTemplate transactionTemplate;
@@ -83,8 +79,6 @@ class OrderConfirmationMailIntegrationTest {
   void setUp() {
     stripeEventRepository.deleteAll();
     orderRepository.deleteAll();
-    profileRepository.deleteAll();
-    guestRepository.deleteAll();
     customerRepository.deleteAll();
     productRepository.deleteAll();
 
@@ -106,8 +100,6 @@ class OrderConfirmationMailIntegrationTest {
   void tearDown() {
     stripeEventRepository.deleteAll();
     orderRepository.deleteAll();
-    profileRepository.deleteAll();
-    guestRepository.deleteAll();
     customerRepository.deleteAll();
     productRepository.deleteAll();
   }

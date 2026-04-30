@@ -1,0 +1,78 @@
+databaseChangeLog:
+  - changeSet:
+      id: 202604271200-1
+      author: Lon60
+      changes:
+        - addColumn:
+            tableName: customer
+            columns:
+              - column:
+                  name: email
+                  type: varchar(255)
+                  constraints:
+                    nullable: true
+
+  - changeSet:
+      id: 202604271200-2
+      author: Lon60
+      changes:
+        - sql:
+            sql: |
+              UPDATE customer
+              SET email = LOWER((SELECT g.email FROM guest g WHERE g.id = customer.id))
+              WHERE customer_type = 'GUEST';
+        - sql:
+            sql: |
+              UPDATE customer
+              SET email = LOWER((
+                SELECT u.email
+                FROM users u JOIN profile p ON p.user_id = u.id
+                WHERE p.id = customer.id
+              ))
+              WHERE customer_type = 'PROFILE';
+
+  - changeSet:
+      id: 202604271200-3
+      author: Lon60
+      changes:
+        - addNotNullConstraint:
+            tableName: customer
+            columnName: email
+            columnDataType: varchar(255)
+        - addUniqueConstraint:
+            tableName: customer
+            columnNames: email
+            constraintName: uk_customer_email
+
+  - changeSet:
+      id: 202604271200-4
+      author: Lon60
+      changes:
+        - dropTable:
+            tableName: guest
+        - dropColumn:
+            tableName: customer
+            columnName: customer_type
+        - dropColumn:
+            tableName: users
+            columnName: email
+
+  - changeSet:
+      id: 202604271200-5
+      author: Lon60
+      changes:
+        - addColumn:
+            tableName: profile
+            columns:
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: true

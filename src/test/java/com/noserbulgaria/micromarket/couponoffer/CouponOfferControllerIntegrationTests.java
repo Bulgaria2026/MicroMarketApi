@@ -6,6 +6,8 @@ import com.noserbulgaria.micromarket.auth.user.User;
 import com.noserbulgaria.micromarket.auth.user.UserRepository;
 import com.noserbulgaria.micromarket.coupon.Coupon;
 import com.noserbulgaria.micromarket.coupon.CouponRepository;
+import com.noserbulgaria.micromarket.customer.Customer;
+import com.noserbulgaria.micromarket.customer.CustomerRepository;
 import com.noserbulgaria.micromarket.customer.PointChangeReason;
 import com.noserbulgaria.micromarket.customer.Profile;
 import com.noserbulgaria.micromarket.customer.ProfileRepository;
@@ -68,6 +70,8 @@ class CouponOfferControllerIntegrationTests {
   private UserRepository userRepository;
   @Autowired
   private ProfileRepository profileRepository;
+  @Autowired
+  private CustomerRepository customerRepository;
   @Autowired
   private PasswordEncoder passwordEncoder;
   @Autowired
@@ -171,10 +175,10 @@ class CouponOfferControllerIntegrationTests {
   @Test
   @WithUserDetails(value = USER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void purchase_deductsPointsAndIssuesSingleUseCoupon() throws Exception {
-    User user = userRepository.findByEmail(USER_EMAIL).orElseThrow();
+    User user = customerRepository.findByEmail(USER_EMAIL).orElseThrow().getProfile().getUser();
     Profile profile = profileRepository.findByUserId(user.getId()).orElseThrow();
-    profile.setStripeCustomerId(null);
-    profileRepository.saveAndFlush(profile);
+    profile.getCustomer().setStripeCustomerId(null);
+    customerRepository.saveAndFlush(profile.getCustomer());
 
     CouponOffer offer = couponOfferRepository.saveAndFlush(CouponOffer.builder()
         .name("Issued offer")
@@ -197,7 +201,7 @@ class CouponOfferControllerIntegrationTests {
     Profile updatedProfile = profileRepository.findByUserId(user.getId()).orElseThrow();
     assertThat(updatedProfile.getPoints()).isEqualTo(80);
     assertThat(updatedProfile.getLastChangeReason()).isEqualTo(PointChangeReason.COUPON_PURCHASED);
-    assertThat(updatedProfile.getStripeCustomerId()).startsWith("cus_generated_");
+    assertThat(updatedProfile.getCustomer().getStripeCustomerId()).startsWith("cus_generated_");
 
     Coupon issuedCoupon = couponRepository.findAll().getFirst();
     assertThat(issuedCoupon.getCouponOffer()).isNotNull();
@@ -213,13 +217,13 @@ class CouponOfferControllerIntegrationTests {
     assertThat(captor.getValue().amountOff()).isEqualTo(600L);
     assertThat(captor.getValue().name()).isEqualTo("Issued offer");
     assertThat(captor.getValue().maxRedemptions()).isEqualTo(1);
-    assertThat(captor.getValue().stripeCustomerId()).isEqualTo(updatedProfile.getStripeCustomerId());
+    assertThat(captor.getValue().stripeCustomerId()).isEqualTo(updatedProfile.getCustomer().getStripeCustomerId());
   }
 
   @Test
   @WithUserDetails(value = USER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void purchase_sameOfferTwice_createsDistinctStripeCouponsAndLocalCoupons() throws Exception {
-    User user = userRepository.findByEmail(USER_EMAIL).orElseThrow();
+    User user = customerRepository.findByEmail(USER_EMAIL).orElseThrow().getProfile().getUser();
     CouponOffer offer = couponOfferRepository.saveAndFlush(CouponOffer.builder()
         .name("Repeatable")
         .pointCost(10)
@@ -249,7 +253,7 @@ class CouponOfferControllerIntegrationTests {
   @Test
   @WithUserDetails(value = USER_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void purchase_withInsufficientPoints_returnsBadRequest() throws Exception {
-    User user = userRepository.findByEmail(USER_EMAIL).orElseThrow();
+    User user = customerRepository.findByEmail(USER_EMAIL).orElseThrow().getProfile().getUser();
     Profile profile = profileRepository.findByUserId(user.getId()).orElseThrow();
     profile.setPoints(5);
     profileRepository.saveAndFlush(profile);
@@ -270,7 +274,7 @@ class CouponOfferControllerIntegrationTests {
 
   @Test
   void reserve_sameLimitedOfferConcurrently_doesNotOversell() throws Exception {
-    User user = userRepository.findByEmail(USER_EMAIL).orElseThrow();
+    User user = customerRepository.findByEmail(USER_EMAIL).orElseThrow().getProfile().getUser();
     CouponOffer offer = couponOfferRepository.saveAndFlush(CouponOffer.builder()
         .name("Limited")
         .pointCost(10)
@@ -338,27 +342,33 @@ class CouponOfferControllerIntegrationTests {
   }
 
   private User ensureUserExists(String email, Role role) {
-    return userRepository.findByEmail(email)
-        .orElseGet(() -> {
-          User user = new User();
-          user.setEmail(email);
-          user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
-          user.setRole(role);
-          user.setStatus(AccountStatus.ACTIVE);
-          return userRepository.saveAndFlush(user);
-        });
+    Customer existing = customerRepository.findByEmail(email).orElse(null);
+    if (existing != null) {
+      return existing.getProfile().getUser();
+    }
+    User user = new User();
+    user.setPassword(Objects.requireNonNull(passwordEncoder.encode(PASSWORD)));
+    user.setRole(role);
+    user.setStatus(AccountStatus.ACTIVE);
+    user = userRepository.saveAndFlush(user);
+
+    Customer customer = new Customer();
+    customer.setEmail(email);
+    Profile profile = new Profile();
+    profile.setUser(user);
+    profile.setCustomer(customer);
+    profile.setPoints(0);
+    customer.setProfile(profile);
+    customerRepository.saveAndFlush(customer);
+    return user;
   }
 
   private void ensureProfile(User user, int points, String stripeCustomerId) {
-    Profile profile = profileRepository.findByUserId(user.getId())
-        .orElseGet(() -> {
-          Profile created = new Profile();
-          created.setUser(user);
-          return created;
-        });
+    Profile profile = profileRepository.findByUserId(user.getId()).orElseThrow();
     profile.setPoints(points);
-    profile.setStripeCustomerId(stripeCustomerId);
+    profile.getCustomer().setStripeCustomerId(stripeCustomerId);
     profileRepository.saveAndFlush(profile);
+    customerRepository.saveAndFlush(profile.getCustomer());
   }
 
   private boolean reserveWhenReleased(CountDownLatch start, java.util.UUID offerId, java.util.UUID userId)

@@ -4,8 +4,9 @@ import com.noserbulgaria.micromarket.auth.user.AccountStatus;
 import com.noserbulgaria.micromarket.auth.user.Role;
 import com.noserbulgaria.micromarket.auth.user.User;
 import com.noserbulgaria.micromarket.auth.user.UserRepository;
+import com.noserbulgaria.micromarket.customer.Customer;
+import com.noserbulgaria.micromarket.customer.CustomerRepository;
 import com.noserbulgaria.micromarket.customer.Profile;
-import com.noserbulgaria.micromarket.customer.ProfileRepository;
 import com.noserbulgaria.micromarket.product.Product;
 import com.noserbulgaria.micromarket.product.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,9 +52,9 @@ class OrderControllerTest {
   private ProductRepository productRepository;
 
   @Autowired
-  private ProfileRepository profileRepository;
+  private CustomerRepository customerRepository;
 
-  private Profile testProfile;
+  private Customer testCustomer;
   private Order testOrder;
   private Product testProduct;
 
@@ -63,16 +64,19 @@ class OrderControllerTest {
     orderRepository.flush();
 
     User customerUser = new User();
-    customerUser.setEmail(CUSTOMER_EMAIL);
     customerUser.setPassword("password");
     customerUser.setRole(Role.USER);
     customerUser.setStatus(AccountStatus.ACTIVE);
     customerUser = userRepository.saveAndFlush(customerUser);
 
-    testProfile = new Profile();
-    testProfile.setUser(customerUser);
-    testProfile.setPoints(0);
-    testProfile = profileRepository.saveAndFlush(testProfile);
+    testCustomer = new Customer();
+    testCustomer.setEmail(CUSTOMER_EMAIL);
+    Profile profile = new Profile();
+    profile.setCustomer(testCustomer);
+    profile.setUser(customerUser);
+    profile.setPoints(0);
+    testCustomer.setProfile(profile);
+    testCustomer = customerRepository.saveAndFlush(testCustomer);
 
     testProduct = new Product();
     testProduct.setName("Cola");
@@ -86,7 +90,7 @@ class OrderControllerTest {
     testOrder = Order.builder()
         .orderNumber("MM-T00001")
         .status(OrderStatusType.PENDING_PAYMENT)
-        .customer(testProfile)
+        .customer(testCustomer)
         .email("admin@test.local")
         .subtotal(new BigDecimal("21.00"))
         .couponCode("WELCOME500")
@@ -121,11 +125,11 @@ class OrderControllerTest {
   @Test
   @WithUserDetails(value = ADMIN_EMAIL, setupBefore = TestExecutionEvent.TEST_EXECUTION)
   void getOrdersAsAdministrator_returnsOk() throws Exception {
-    mockMvc.perform(get("/order").param("customerId", testProfile.getId().toString()))
+    mockMvc.perform(get("/order").param("customerId", testCustomer.getId().toString()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()))
         .andExpect(jsonPath("$.content[0].orderNumber").value("MM-T00001"))
-        .andExpect(jsonPath("$.content[0].customerId").value(testProfile.getId().toString()))
+        .andExpect(jsonPath("$.content[0].customerId").value(testCustomer.getId().toString()))
         .andExpect(jsonPath("$.content[0].email").value("admin@test.local"))
         .andExpect(jsonPath("$.content[0].subtotal").value(21.00))
         .andExpect(jsonPath("$.content[0].couponCode").value("WELCOME500"))
@@ -146,7 +150,7 @@ class OrderControllerTest {
     Order other = Order.builder()
         .orderNumber("MM-X99999")
         .status(OrderStatusType.PAID)
-        .customer(testProfile)
+        .customer(testCustomer)
         .email("other@test.local")
         .subtotal(new BigDecimal("5.00"))
         .build();
@@ -164,7 +168,7 @@ class OrderControllerTest {
     Order other = Order.builder()
         .orderNumber("MM-X99999")
         .status(OrderStatusType.PAID)
-        .customer(testProfile)
+        .customer(testCustomer)
         .email("someone@elsewhere.com")
         .subtotal(new BigDecimal("5.00"))
         .build();
@@ -183,7 +187,7 @@ class OrderControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(testOrder.getId().toString()))
         .andExpect(jsonPath("$.orderNumber").value("MM-T00001"))
-        .andExpect(jsonPath("$.customerId").value(testProfile.getId().toString()))
+        .andExpect(jsonPath("$.customerId").value(testCustomer.getId().toString()))
         .andExpect(jsonPath("$.email").value("admin@test.local"))
         .andExpect(jsonPath("$.subtotal").value(21.00))
         .andExpect(jsonPath("$.couponCode").value("WELCOME500"))
@@ -204,14 +208,14 @@ class OrderControllerTest {
     Order filteredOut = Order.builder()
         .orderNumber("MM-T00002")
         .status(OrderStatusType.PAID)
-        .customer(testProfile)
+        .customer(testCustomer)
         .email("admin@test.local")
         .subtotal(new BigDecimal("10.50"))
         .build();
     orderRepository.saveAndFlush(filteredOut);
 
     mockMvc.perform(get("/order")
-            .param("customerId", testProfile.getId().toString())
+            .param("customerId", testCustomer.getId().toString())
             .param("status", OrderStatusType.PENDING_PAYMENT.name()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
@@ -246,7 +250,7 @@ class OrderControllerTest {
         .andExpect(jsonPath("$.content.length()").value(1))
         .andExpect(jsonPath("$.content[0].id").value(testOrder.getId().toString()))
         .andExpect(jsonPath("$.content[0].orderNumber").value("MM-T00001"))
-        .andExpect(jsonPath("$.content[0].customerId").value(testProfile.getId().toString()))
+        .andExpect(jsonPath("$.content[0].customerId").value(testCustomer.getId().toString()))
         .andExpect(jsonPath("$.content[0].subtotal").value(21.00))
         .andExpect(jsonPath("$.content[0].couponCode").value("WELCOME500"))
         .andExpect(jsonPath("$.content[0].couponAmountOff").value(5.00))
