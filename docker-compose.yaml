@@ -44,7 +44,7 @@ services:
       - "8080:8080"  # optional if exposed via proxy
 
   frontend:
-    image: micromarket_ui:latest
+    image: ghcr.io/bulgaria2026/micromarketui:latest
     container_name: micromarket_ui
     environment:
       VITE_BACKEND_URL: http://backend:8080  # update when known and save in env
